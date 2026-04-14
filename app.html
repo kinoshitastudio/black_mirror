@@ -1,0 +1,1610 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>BLACK MIRROR BOARD v0.3</title>
+    <style>
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+        :root {
+            --ink:   #080808;
+            --paper: #FAFAF8;
+            --glow:  #F2EFE8;
+            --dim:   #5a5a5a;
+            --line:  #202020;
+            --mid:   #B8B4AC;
+        }
+
+        html, body { height: 100%; overflow: hidden; }
+
+        body {
+            display: flex;
+            flex-direction: column;
+            background: var(--ink);
+            color: var(--glow);
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 13px;
+        }
+
+        /* ── Header ── */
+        header {
+            flex-shrink: 0;
+            height: 42px;
+            background: var(--ink);
+            border-bottom: 1px solid var(--line);
+            display: flex;
+            align-items: center;
+            padding: 0 16px;
+            gap: 12px;
+            z-index: 100;
+        }
+
+        .logo {
+            font-size: 10px;
+            font-weight: bold;
+            letter-spacing: 0.22em;
+            color: var(--glow);
+            user-select: none;
+        }
+
+        .logo-mark { color: var(--dim); margin-right: 4px; }
+
+        .logo-ver {
+            font-size: 8px;
+            color: var(--dim);
+            letter-spacing: 0.1em;
+            margin-left: 2px;
+        }
+
+        .header-right {
+            margin-left: auto;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .zoom-label {
+            font-size: 9px;
+            color: var(--dim);
+            letter-spacing: 0.1em;
+            min-width: 34px;
+            text-align: right;
+            user-select: none;
+        }
+
+        .hbtn {
+            background: none;
+            border: 1px solid var(--line);
+            color: var(--dim);
+            font-family: inherit;
+            font-size: 8px;
+            letter-spacing: 0.14em;
+            padding: 3px 9px;
+            cursor: pointer;
+            transition: border-color 0.12s, color 0.12s;
+        }
+
+        .hbtn:hover { border-color: var(--glow); color: var(--glow); }
+
+        .hlink {
+            color: var(--dim);
+            text-decoration: none;
+            font-size: 8px;
+            letter-spacing: 0.14em;
+            transition: color 0.12s;
+        }
+
+        .hlink:hover { color: var(--glow); }
+
+        /* ── Main ── */
+        main {
+            flex: 1;
+            display: flex;
+            overflow: hidden;
+            min-height: 0;
+        }
+
+        /* ── Toolbar ── */
+        .toolbar {
+            flex-shrink: 0;
+            width: 46px;
+            background: var(--ink);
+            border-right: 1px solid var(--line);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 8px 0;
+            gap: 1px;
+            overflow: visible;
+            position: relative;
+            z-index: 200;
+        }
+
+        .tool-btn {
+            width: 34px;
+            height: 32px;
+            background: none;
+            border: 1px solid transparent;
+            color: rgba(255,255,255,0.35);
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: border-color 0.1s, color 0.1s;
+            user-select: none;
+        }
+
+        .tool-btn:hover  { border-color: rgba(255,255,255,0.18); color: rgba(255,255,255,0.65); }
+        .tool-btn.active { border-color: var(--glow); color: #fff; }
+
+        .tool-sep {
+            width: 22px;
+            height: 1px;
+            background: var(--line);
+            margin: 4px 0;
+            flex-shrink: 0;
+        }
+
+        /* ── Shape group dropdown ── */
+        .shape-group { position: relative; }
+
+        .shape-submenu {
+            display: none;
+            position: absolute;
+            left: calc(100% + 4px);
+            top: 0;
+            background: #0d0d0d;
+            border: 1px solid var(--line);
+            flex-direction: column;
+            gap: 1px;
+            padding: 3px;
+            z-index: 300;
+        }
+
+        .shape-submenu.open { display: flex; }
+
+        .shape-submenu .tool-btn {
+            width: 30px;
+            height: 28px;
+            font-size: 12px;
+        }
+
+        /* Width dots */
+        .w-btn {
+            width: 34px;
+            height: 26px;
+            background: none;
+            border: 1px solid transparent;
+            color: rgba(255,255,255,0.3);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: color 0.1s;
+        }
+
+        .w-btn:hover  { color: rgba(255,255,255,0.6); }
+        .w-btn.active { color: #fff; }
+
+        .w-dot {
+            border-radius: 50%;
+            background: currentColor;
+            flex-shrink: 0;
+        }
+
+        /* ── Canvas panel ── */
+        .canvas-panel {
+            flex: 1;
+            position: relative;
+            background: var(--paper);
+            border-right: 1px solid var(--line);
+            overflow: hidden;
+            min-width: 0;
+        }
+
+        .canvas-panel::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background-image:
+                linear-gradient(rgba(0,0,0,0.042) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(0,0,0,0.042) 1px, transparent 1px);
+            background-size: 32px 32px;
+            pointer-events: none;
+            z-index: 1;
+        }
+
+        .canvas-panel::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.45'/%3E%3C/svg%3E");
+            background-size: 200px 200px;
+            opacity: 0.03;
+            pointer-events: none;
+            z-index: 2;
+        }
+
+        #c {
+            position: absolute;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 3;
+            touch-action: none;
+        }
+
+        #textOverlay {
+            position: absolute;
+            display: none;
+            z-index: 30;
+        }
+
+        #textOverlay input {
+            min-width: 100px;
+            background: transparent;
+            border: none;
+            border-bottom: 1.5px solid #0c0c0c;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            color: #0c0c0c;
+            outline: none;
+            padding: 2px 2px 3px;
+            letter-spacing: 0.02em;
+        }
+
+        .shape-hint {
+            position: absolute;
+            bottom: 12px;
+            left: 12px;
+            z-index: 10;
+            font-size: 9px;
+            color: var(--dim);
+            letter-spacing: 0.08em;
+            pointer-events: none;
+        }
+
+        .det-label {
+            position: absolute;
+            font-size: 13px;
+            color: #aaa;
+            pointer-events: none;
+            z-index: 20;
+            transition: opacity 1.4s ease;
+        }
+
+        /* ── Terminal panel ── */
+        .terminal-panel {
+            width: 50%;
+            min-width: 240px;
+            display: flex;
+            flex-direction: column;
+            background: var(--ink);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .terminal-panel::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: repeating-linear-gradient(
+                0deg,
+                transparent 0px,
+                transparent 3px,
+                rgba(255,255,255,0.012) 3px,
+                rgba(255,255,255,0.012) 4px
+            );
+            pointer-events: none;
+            z-index: 50;
+        }
+
+        @keyframes glitch {
+            0%,94%  { transform: translateX(0); }
+            95%     { transform: translateX(-3px) scaleY(0.998); }
+            96%     { transform: translateX(3px); }
+            97%     { transform: translateX(-1px); }
+            98%,100%{ transform: translateX(0); }
+        }
+        .terminal-panel { animation: glitch 11s infinite; }
+
+        .term-hd {
+            flex-shrink: 0;
+            height: 30px;
+            border-bottom: 1px solid var(--line);
+            display: flex;
+            align-items: center;
+            padding: 0 14px;
+            gap: 7px;
+        }
+
+        .term-dots { display: flex; gap: 5px; }
+        .term-dots span { width: 7px; height: 7px; border-radius: 50%; background: var(--line); }
+        .term-title { font-size: 9px; letter-spacing: 0.12em; color: var(--dim); }
+
+        .term-body {
+            flex: 1;
+            overflow-y: auto;
+            padding: 12px 16px 6px;
+            min-height: 0;
+        }
+
+        .term-body::-webkit-scrollbar { width: 2px; }
+        .term-body::-webkit-scrollbar-thumb { background: var(--line); }
+
+        .t-cmd   { color: var(--glow); font-size: 12px; line-height: 1.6; margin-top: 10px; }
+        .t-cmd::before { content: '$ '; color: var(--dim); }
+        .t-out   { color: var(--mid);  font-size: 11.5px; line-height: 1.6; }
+        .t-ok    { color: #7a9e7a;     font-size: 11.5px; line-height: 1.6; }
+        .t-dim   { color: #454545;     font-size: 11px;   line-height: 1.5; }
+        .t-sep   { height: 6px; }
+        .t-ascii { color: var(--glow); font-size: 10px; line-height: 1.3; margin: 8px 0; white-space: pre; overflow-x: auto; }
+
+        .term-input-row {
+            flex-shrink: 0;
+            border-top: 1px solid var(--line);
+            display: flex;
+            align-items: center;
+            padding: 7px 16px;
+            gap: 8px;
+        }
+
+        .t-prompt { color: var(--dim); user-select: none; }
+
+        #ti {
+            flex: 1;
+            background: none;
+            border: none;
+            color: var(--glow);
+            font-family: inherit;
+            font-size: 12px;
+            outline: none;
+            caret-color: var(--glow);
+        }
+
+        #ti::placeholder { color: #282828; }
+
+        /* ── Usage overlay ── */
+        #usageOverlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(8,8,8,0.88);
+            z-index: 400;
+            display: none;
+            align-items: center;
+            justify-content: center;
+        }
+
+        #usageOverlay.open { display: flex; }
+
+        .usage-box {
+            background: #0c0c0c;
+            border: 1px solid var(--line);
+            padding: 28px 32px;
+            max-width: 500px;
+            width: 92%;
+            max-height: 82vh;
+            overflow-y: auto;
+        }
+
+        .usage-box h2 { font-size: 9px; letter-spacing: 0.22em; color: var(--dim); margin-bottom: 20px; }
+        .usage-box h3 { font-size: 8px; letter-spacing: 0.18em; color: var(--dim); margin: 18px 0 8px; text-transform: uppercase; }
+        .usage-box pre { font-size: 11px; line-height: 1.75; color: var(--mid); white-space: pre-wrap; }
+        .usage-box pre b { color: var(--glow); }
+
+        .usage-close {
+            display: block;
+            margin-top: 20px;
+            background: none;
+            border: 1px solid var(--line);
+            color: var(--dim);
+            font-family: inherit;
+            font-size: 9px;
+            letter-spacing: 0.14em;
+            padding: 6px 14px;
+            cursor: pointer;
+        }
+
+        .usage-close:hover { border-color: var(--glow); color: var(--glow); }
+
+        /* ── Mobile ── */
+        @media (max-width: 700px) {
+            main { flex-direction: column; }
+
+            .toolbar {
+                width: 100%;
+                height: 44px;
+                flex-direction: row;
+                border-right: none;
+                border-bottom: 1px solid var(--line);
+                padding: 0 8px;
+                gap: 0;
+                overflow-x: auto;
+                overflow-y: visible;
+            }
+
+            .tool-sep   { width: 1px; height: 22px; margin: 0 4px; }
+            .tool-btn   { width: 36px; height: 36px; flex-shrink: 0; }
+            .w-btn      { width: 28px; height: 36px; flex-shrink: 0; }
+
+            .shape-submenu {
+                left: 0;
+                top: calc(100% + 2px);
+                flex-direction: row;
+            }
+
+            .canvas-panel {
+                flex: none;
+                height: 42vh;
+                border-right: none;
+                border-bottom: 1px solid var(--line);
+            }
+
+            .terminal-panel { width: 100%; flex: 1; }
+        }
+    </style>
+</head>
+<body>
+
+<header>
+    <div class="logo">
+        <span class="logo-mark">◼</span>BLACK MIRROR BOARD<span class="logo-ver">v0.3</span>
+    </div>
+    <div class="header-right">
+        <span class="zoom-label" id="zoomLabel">100%</span>
+        <button class="hbtn" onclick="clearCanvas()">CLEAR</button>
+        <button class="hbtn" onclick="flushTerm()">FLUSH</button>
+        <button class="hbtn" onclick="openUsage()">USAGE</button>
+        <a class="hlink" href="overview.html">OVERVIEW →</a>
+    </div>
+</header>
+
+<main>
+    <!-- Toolbar -->
+    <aside class="toolbar" id="toolbar">
+        <button class="tool-btn active" data-tool="select" title="Select (S)">↖</button>
+        <button class="tool-btn"        data-tool="pen"    title="Pen (P)">✏</button>
+        <button class="tool-btn"        data-tool="eraser" title="Eraser (E)">⌫</button>
+        <div class="tool-sep"></div>
+        <div class="shape-group" id="shapeGroup">
+            <button class="tool-btn shape-main" id="shapeBtn" title="Shapes (C/G/Q/A)">○</button>
+            <div class="shape-submenu" id="shapeSubmenu">
+                <button class="tool-btn" data-tool="circle"   title="Circle (C)">○</button>
+                <button class="tool-btn" data-tool="triangle" title="Triangle (G)">△</button>
+                <button class="tool-btn" data-tool="square"   title="Square (Q)">□</button>
+                <button class="tool-btn" data-tool="arrow"    title="Arrow (A)">→</button>
+            </div>
+        </div>
+        <div class="tool-sep"></div>
+        <button class="tool-btn" data-tool="text" title="Text (T)">T</button>
+        <div class="tool-sep"></div>
+        <button class="w-btn active" data-w="1.5" title="Thin (1)">
+            <span class="w-dot" style="width:3px;height:3px"></span>
+        </button>
+        <button class="w-btn" data-w="2.5" title="Medium (2)">
+            <span class="w-dot" style="width:6px;height:6px"></span>
+        </button>
+        <button class="w-btn" data-w="4" title="Thick (3)">
+            <span class="w-dot" style="width:10px;height:10px"></span>
+        </button>
+    </aside>
+
+    <!-- Canvas -->
+    <section class="canvas-panel" id="cp">
+        <canvas id="c"></canvas>
+        <div id="textOverlay">
+            <input id="ti2" type="text" autocomplete="off" spellcheck="false" placeholder="type…">
+        </div>
+        <div class="shape-hint">○ △ □ → — draw or toolbar · wheel zoom · dbl-click reset</div>
+    </section>
+
+    <!-- Terminal -->
+    <section class="terminal-panel">
+        <div class="term-hd">
+            <div class="term-dots"><span></span><span></span><span></span></div>
+            <span class="term-title">blackmirror — bash</span>
+        </div>
+        <div class="term-body" id="tb"></div>
+        <div class="term-input-row">
+            <span class="t-prompt">❯</span>
+            <input type="text" id="ti" placeholder="type a command… (try: youtube)" autocomplete="off" spellcheck="false">
+        </div>
+    </section>
+</main>
+
+<!-- Usage overlay -->
+<div id="usageOverlay">
+    <div class="usage-box">
+        <h2>USAGE — BLACK MIRROR BOARD v0.3</h2>
+        <h3>TOOLS</h3>
+        <pre><b>↖ Select</b>   click to select, drag to move, Del to delete
+<b>✏ Pen</b>      free draw — shape detected on lift
+<b>⌫ Eraser</b>   click object to remove
+<b>○ △ □ →</b>   drag to place shape → terminal fires
+<b>T  Text</b>    click canvas, type, Enter to confirm
+       ↳ type "youtube" for Easter Egg</pre>
+        <h3>ZOOM</h3>
+        <pre><b>Wheel</b>       zoom in / out
+<b>Pinch</b>       pinch-to-zoom (mobile / trackpad)
+<b>Dbl-click</b>   reset to 100%</pre>
+        <h3>KEYBOARD</h3>
+        <pre><b>S P E C G Q A T</b>   switch tool
+<b>1 2 3</b>               line width
+<b>Del / Backspace</b>     delete selected
+<b>Esc</b>                 cancel / deselect</pre>
+        <h3>SHAPES → COMMANDS</h3>
+        <pre><b>○</b>  git init / npm create
+<b>◎</b>  docker run / kubectl apply
+<b>△</b>  git branch / if-else build
+<b>□</b>  docker build / terraform
+<b>→</b>  curl | jq / grep | sort
+<b>T</b>  stdin echo → terminal</pre>
+        <button class="usage-close" onclick="closeUsage()">CLOSE ✕</button>
+    </div>
+</div>
+
+<script>
+'use strict';
+
+// ══════════════════════════════════════════════════
+// STATE
+// ══════════════════════════════════════════════════
+
+const S = {
+    tool:       'select',
+    lineWidth:  1.5,
+    objects:    [],         // { id, type, data, selected }
+    selectedId: null,
+    isDown:     false,
+    startPt:    null,
+    curPt:      null,
+    penPts:     [],
+    dragOff:    null,       // { x, y } — consistent key names
+    textPos:    null,
+};
+
+// Viewport transform
+const VIEW = { scale: 1, tx: 0, ty: 0 };
+
+let CW = 0, CH = 0;
+let detectTimer = null;
+let prevShape   = null;
+let prevShapeTs = 0;
+
+// ══════════════════════════════════════════════════
+// AUDIO — Web Audio API mechanical key click
+// ══════════════════════════════════════════════════
+
+let _ac = null;
+
+function getAC() {
+    if (!_ac) _ac = new (window.AudioContext || window.webkitAudioContext)();
+    if (_ac.state === 'suspended') _ac.resume();
+    return _ac;
+}
+
+function playClick(hard) {
+    try {
+        const ac  = getAC();
+        const vol = hard ? 0.12  : 0.04;
+        const dec = hard ? 0.010 : 0.004;
+        const dur = hard ? 0.055 : 0.020;
+        const buf = ac.createBuffer(1, Math.ceil(ac.sampleRate * dur), ac.sampleRate);
+        const d   = buf.getChannelData(0);
+        for (let i = 0; i < d.length; i++)
+            d[i] = (Math.random() * 2 - 1) * Math.exp(-i / (ac.sampleRate * dec));
+        const src  = ac.createBufferSource();
+        src.buffer = buf;
+        const bpf  = ac.createBiquadFilter();
+        bpf.type            = 'bandpass';
+        bpf.frequency.value = 1800 + Math.random() * 1400;
+        bpf.Q.value         = 0.8;
+        const gain = ac.createGain();
+        gain.gain.setValueAtTime(vol, ac.currentTime);
+        src.connect(bpf); bpf.connect(gain); gain.connect(ac.destination);
+        src.start(); src.stop(ac.currentTime + dur + 0.02);
+    } catch (_) {}
+}
+
+// ══════════════════════════════════════════════════
+// CANVAS INIT
+// ══════════════════════════════════════════════════
+
+const canvas = document.getElementById('c');
+const ctx    = canvas.getContext('2d');
+
+function initCanvas() {
+    resizeCanvas();
+    window.addEventListener('resize', resizeCanvas);
+
+    // Mouse
+    canvas.addEventListener('mousedown', e => {
+        getAC();
+        onDown(e.clientX, e.clientY);
+    });
+    canvas.addEventListener('mousemove', e => { if (S.isDown) onMove(e.clientX, e.clientY); });
+    canvas.addEventListener('mouseup',    onUp);
+    canvas.addEventListener('mouseleave', onUp);
+
+    // Double-click → reset zoom
+    canvas.addEventListener('dblclick', () => {
+        if (S.tool !== 'select') return;
+        VIEW.scale = 1; VIEW.tx = 0; VIEW.ty = 0;
+        updateZoomLabel(); redrawAll();
+    });
+
+    // Wheel zoom
+    canvas.addEventListener('wheel', e => {
+        e.preventDefault();
+        const r      = canvas.getBoundingClientRect();
+        const sx     = e.clientX - r.left, sy = e.clientY - r.top;
+        const cx     = (sx - VIEW.tx) / VIEW.scale;
+        const cy     = (sy - VIEW.ty) / VIEW.scale;
+        const factor = e.deltaY < 0 ? 1.1 : 1 / 1.1;
+        VIEW.scale   = Math.max(0.15, Math.min(8, VIEW.scale * factor));
+        VIEW.tx      = sx - cx * VIEW.scale;
+        VIEW.ty      = sy - cy * VIEW.scale;
+        updateZoomLabel(); redrawAll();
+    }, { passive: false });
+
+    // Touch
+    let pinchDist = null;
+
+    canvas.addEventListener('touchstart', e => {
+        e.preventDefault();
+        getAC();
+        if (e.touches.length === 2) {
+            // Cancel drawing, enter pinch mode
+            S.isDown = false; S.penPts = []; S.dragOff = null;
+            pinchDist = touchDist(e.touches);
+        } else if (e.touches.length === 1) {
+            pinchDist = null;
+            onDown(e.touches[0].clientX, e.touches[0].clientY);
+        }
+    }, { passive: false });
+
+    canvas.addEventListener('touchmove', e => {
+        e.preventDefault();
+        if (e.touches.length === 2 && pinchDist !== null) {
+            const newDist = touchDist(e.touches);
+            const mid     = touchMid(e.touches);
+            const r       = canvas.getBoundingClientRect();
+            const sx      = mid.x - r.left, sy = mid.y - r.top;
+            const cx      = (sx - VIEW.tx) / VIEW.scale;
+            const cy      = (sy - VIEW.ty) / VIEW.scale;
+            VIEW.scale    = Math.max(0.15, Math.min(8, VIEW.scale * (newDist / pinchDist)));
+            VIEW.tx       = sx - cx * VIEW.scale;
+            VIEW.ty       = sy - cy * VIEW.scale;
+            pinchDist     = newDist;
+            updateZoomLabel(); redrawAll();
+        } else if (e.touches.length === 1 && S.isDown) {
+            onMove(e.touches[0].clientX, e.touches[0].clientY);
+        }
+    }, { passive: false });
+
+    canvas.addEventListener('touchend', e => {
+        if (e.touches.length < 2) pinchDist = null;
+        if (e.touches.length === 0) onUp();
+    });
+}
+
+function touchDist(touches) {
+    return Math.hypot(
+        touches[1].clientX - touches[0].clientX,
+        touches[1].clientY - touches[0].clientY
+    );
+}
+
+function touchMid(touches) {
+    return {
+        x: (touches[0].clientX + touches[1].clientX) / 2,
+        y: (touches[0].clientY + touches[1].clientY) / 2,
+    };
+}
+
+function resizeCanvas() {
+    const panel = document.getElementById('cp');
+    CW = panel.clientWidth;
+    CH = panel.clientHeight;
+    const dpr     = window.devicePixelRatio || 1;
+    canvas.width  = CW * dpr;
+    canvas.height = CH * dpr;
+    redrawAll();
+}
+
+// Screen coords → canvas (world) coords
+function getPos(cx, cy) {
+    const r = canvas.getBoundingClientRect();
+    return {
+        x: (cx - r.left  - VIEW.tx) / VIEW.scale,
+        y: (cy - r.top   - VIEW.ty) / VIEW.scale,
+    };
+}
+
+function updateZoomLabel() {
+    document.getElementById('zoomLabel').textContent = Math.round(VIEW.scale * 100) + '%';
+}
+
+// ══════════════════════════════════════════════════
+// POINTER HANDLERS
+// ══════════════════════════════════════════════════
+
+function onDown(cx, cy) {
+    const p = getPos(cx, cy);
+    S.isDown  = true;
+    S.startPt = { ...p };
+    S.curPt   = { ...p };
+
+    if (S.tool === 'select') {
+        const hit = [...S.objects].reverse().find(o => hitTest(o, p.x, p.y));
+        S.objects.forEach(o => o.selected = false);
+        if (hit) {
+            hit.selected = true;
+            S.selectedId = hit.id;
+            S.dragOff    = { x: p.x, y: p.y };   // FIX: {x,y} not {dx,dy}
+        } else {
+            S.selectedId = null;
+        }
+        redrawAll();
+    } else if (S.tool === 'pen') {
+        S.penPts = [p];
+    } else if (S.tool === 'eraser') {
+        eraseAt(p);
+    } else if (S.tool === 'text') {
+        commitText();
+        showTextInput(p);
+    }
+}
+
+function onMove(cx, cy) {
+    const p = getPos(cx, cy);
+    S.curPt = { ...p };
+
+    if (S.tool === 'select' && S.selectedId && S.dragOff) {
+        const obj = S.objects.find(o => o.id === S.selectedId);
+        if (obj) {
+            const dx = p.x - S.dragOff.x, dy = p.y - S.dragOff.y;   // FIX: .x/.y
+            moveObj(obj, dx, dy);
+            S.dragOff = { x: p.x, y: p.y };                           // FIX: {x,y}
+            redrawAll();
+        }
+    } else if (S.tool === 'pen' && S.penPts.length > 0) {
+        S.penPts.push(p);
+        // Draw in-progress stroke with VIEW transform applied
+        const dpr = window.devicePixelRatio || 1;
+        ctx.save();
+        ctx.setTransform(VIEW.scale * dpr, 0, 0, VIEW.scale * dpr, VIEW.tx * dpr, VIEW.ty * dpr);
+        ctx.strokeStyle = '#0c0c0c';
+        ctx.lineWidth   = S.lineWidth;
+        ctx.lineCap     = 'round';
+        ctx.lineJoin    = 'round';
+        const pts = S.penPts;
+        const prev = pts[pts.length - 2], cur = pts[pts.length - 1];
+        const mx = (prev.x + cur.x) / 2, my = (prev.y + cur.y) / 2;
+        ctx.beginPath();
+        ctx.moveTo(prev.x, prev.y);
+        ctx.quadraticCurveTo(prev.x, prev.y, mx, my);
+        ctx.stroke();
+        ctx.restore();
+    } else if (S.tool === 'eraser') {
+        eraseAt(p);
+    } else if (isShapeTool(S.tool)) {
+        redrawAll();
+    }
+}
+
+function onUp() {
+    if (!S.isDown) return;
+    S.isDown = false;
+
+    if (S.tool === 'pen') {
+        if (S.penPts.length > 4) {
+            const id  = genId();
+            const obj = { id, type: 'stroke', data: { pts: [...S.penPts], lw: S.lineWidth }, selected: false };
+            S.objects.push(obj);
+            clearTimeout(detectTimer);
+            detectTimer = setTimeout(() => runFreeDetect(obj), 400);
+        }
+        S.penPts = [];
+        redrawAll();
+    } else if (isShapeTool(S.tool) && S.startPt) {
+        finalizeShape();
+    }
+
+    S.dragOff = null;
+}
+
+// ══════════════════════════════════════════════════
+// RENDERING
+// ══════════════════════════════════════════════════
+
+function redrawAll() {
+    const dpr = window.devicePixelRatio || 1;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, CW, CH);
+    ctx.setTransform(VIEW.scale * dpr, 0, 0, VIEW.scale * dpr, VIEW.tx * dpr, VIEW.ty * dpr);
+    for (const obj of S.objects) renderObject(obj);
+    if (S.isDown && isShapeTool(S.tool) && S.startPt && S.curPt) renderPreview();
+}
+
+function renderObject(obj) {
+    switch (obj.type) {
+        case 'circle':   renderCircle(obj);   break;
+        case 'triangle': renderTriangle(obj); break;
+        case 'square':   renderSquare(obj);   break;
+        case 'arrow':    renderArrow(obj);    break;
+        case 'text':     renderText(obj);     break;
+        case 'stroke':   renderStroke(obj);   break;
+    }
+}
+
+function baseStyle() {
+    ctx.strokeStyle = '#0c0c0c';
+    ctx.lineWidth   = 2.2;
+    ctx.lineCap     = 'round';
+    ctx.lineJoin    = 'round';
+}
+
+function renderCircle(obj) {
+    const {cx, cy, rx, ry} = obj.data;
+    ctx.save(); baseStyle();
+    ctx.beginPath();
+    ctx.ellipse(cx, cy, Math.max(rx, 1), Math.max(ry, 1), 0, 0, 2 * Math.PI);
+    ctx.stroke();
+    if (obj.selected) selBox(cx - rx, cy - ry, 2 * rx, 2 * ry);
+    ctx.restore();
+}
+
+function renderTriangle(obj) {
+    const {x, y, w, h} = obj.data;
+    ctx.save(); baseStyle();
+    ctx.beginPath();
+    ctx.moveTo(x + w / 2, y);
+    ctx.lineTo(x + w, y + h);
+    ctx.lineTo(x, y + h);
+    ctx.closePath(); ctx.stroke();
+    if (obj.selected) selBox(x, y, w, h);
+    ctx.restore();
+}
+
+function renderSquare(obj) {
+    const {x, y, w, h} = obj.data;
+    ctx.save(); baseStyle();
+    ctx.strokeRect(x, y, w, h);
+    if (obj.selected) selBox(x, y, w, h);
+    ctx.restore();
+}
+
+function renderArrow(obj) {
+    const {x1, y1, x2, y2} = obj.data;
+    const ang = Math.atan2(y2 - y1, x2 - x1), hl = 13;
+    ctx.save(); baseStyle();
+    ctx.beginPath();
+    ctx.moveTo(x1, y1); ctx.lineTo(x2, y2);
+    ctx.moveTo(x2, y2); ctx.lineTo(x2 - hl * Math.cos(ang - Math.PI/6), y2 - hl * Math.sin(ang - Math.PI/6));
+    ctx.moveTo(x2, y2); ctx.lineTo(x2 - hl * Math.cos(ang + Math.PI/6), y2 - hl * Math.sin(ang + Math.PI/6));
+    ctx.stroke();
+    if (obj.selected) selBox(Math.min(x1,x2), Math.min(y1,y2), Math.abs(x2-x1), Math.abs(y2-y1));
+    ctx.restore();
+}
+
+function renderText(obj) {
+    const {x, y, text} = obj.data;
+    ctx.save();
+    ctx.font      = `${S.lineWidth > 3 ? 'bold ' : ''}14px "Courier New", monospace`;
+    ctx.fillStyle = '#0c0c0c';
+    ctx.fillText(text, x, y);
+    if (obj.selected) {
+        const tw = ctx.measureText(text).width;
+        selBox(x - 2, y - 15, tw + 4, 20);
+    }
+    ctx.restore();
+}
+
+function renderStroke(obj) {
+    const {pts, lw} = obj.data;
+    if (pts.length < 2) return;
+    ctx.save();
+    ctx.strokeStyle = '#0c0c0c';
+    ctx.lineWidth   = lw;
+    ctx.lineCap     = 'round';
+    ctx.lineJoin    = 'round';
+    ctx.beginPath();
+    ctx.moveTo(pts[0].x, pts[0].y);
+    for (let i = 1; i < pts.length; i++) {
+        const pp = pts[i-1], p = pts[i];
+        const mx = (pp.x + p.x) / 2, my = (pp.y + p.y) / 2;
+        ctx.quadraticCurveTo(pp.x, pp.y, mx, my);
+    }
+    ctx.stroke();
+    if (obj.selected) {
+        const bb = strokeBBox(pts);
+        selBox(bb.x, bb.y, bb.w, bb.h);
+    }
+    ctx.restore();
+}
+
+function renderPreview() {
+    const {x: x1, y: y1} = S.startPt, {x: x2, y: y2} = S.curPt;
+    const ang = Math.atan2(y2 - y1, x2 - x1), hl = 13;
+    ctx.save();
+    ctx.strokeStyle = 'rgba(12,12,12,0.38)';
+    ctx.lineWidth   = 2;
+    ctx.setLineDash([5, 4]);
+    switch (S.tool) {
+        case 'circle': {
+            const cx = (x1+x2)/2, cy = (y1+y2)/2;
+            ctx.beginPath();
+            ctx.ellipse(cx, cy, Math.max(Math.abs(x2-x1)/2,1), Math.max(Math.abs(y2-y1)/2,1), 0, 0, 2*Math.PI);
+            ctx.stroke(); break;
+        }
+        case 'triangle': {
+            const x = Math.min(x1,x2), y = Math.min(y1,y2), w = Math.abs(x2-x1), h = Math.abs(y2-y1);
+            ctx.beginPath(); ctx.moveTo(x+w/2,y); ctx.lineTo(x+w,y+h); ctx.lineTo(x,y+h); ctx.closePath(); ctx.stroke(); break;
+        }
+        case 'square':
+            ctx.strokeRect(Math.min(x1,x2), Math.min(y1,y2), Math.abs(x2-x1), Math.abs(y2-y1)); break;
+        case 'arrow': {
+            ctx.beginPath(); ctx.moveTo(x1,y1); ctx.lineTo(x2,y2); ctx.stroke();
+            ctx.setLineDash([]);
+            ctx.beginPath();
+            ctx.moveTo(x2,y2); ctx.lineTo(x2-hl*Math.cos(ang-Math.PI/6), y2-hl*Math.sin(ang-Math.PI/6));
+            ctx.moveTo(x2,y2); ctx.lineTo(x2-hl*Math.cos(ang+Math.PI/6), y2-hl*Math.sin(ang+Math.PI/6));
+            ctx.stroke(); break;
+        }
+    }
+    ctx.restore();
+}
+
+// Selection box in world coords — scale handles so they appear 6px on screen
+function selBox(x, y, w, h) {
+    const p  = 6  / VIEW.scale;
+    const lw = 1  / VIEW.scale;
+    const ds = 4  / VIEW.scale;
+    const dg = 3  / VIEW.scale;
+    ctx.save();
+    ctx.strokeStyle = 'rgba(0,0,0,0.28)';
+    ctx.lineWidth   = lw;
+    ctx.setLineDash([ds, dg]);
+    ctx.strokeRect(x - p, y - p, w + 2*p, h + 2*p);
+    ctx.restore();
+}
+
+// ══════════════════════════════════════════════════
+// HIT TEST & MOVE
+// ══════════════════════════════════════════════════
+
+function hitTest(obj, x, y) {
+    const p = 10;
+    switch (obj.type) {
+        case 'circle': {
+            const {cx, cy, rx, ry} = obj.data;
+            return x >= cx-rx-p && x <= cx+rx+p && y >= cy-ry-p && y <= cy+ry+p;
+        }
+        case 'triangle': case 'square': {
+            const {x: ox, y: oy, w, h} = obj.data;
+            return x >= ox-p && x <= ox+w+p && y >= oy-p && y <= oy+h+p;
+        }
+        case 'arrow': {
+            const {x1, y1, x2, y2} = obj.data;
+            const len2 = (x2-x1)**2 + (y2-y1)**2;
+            if (!len2) return Math.hypot(x-x1, y-y1) < p;
+            const t = Math.max(0, Math.min(1, ((x-x1)*(x2-x1)+(y-y1)*(y2-y1))/len2));
+            return Math.hypot(x-(x1+t*(x2-x1)), y-(y1+t*(y2-y1))) < 12;
+        }
+        case 'text': {
+            const {x: ox, y: oy, text} = obj.data;
+            return x >= ox-p && x <= ox+text.length*9+p && y >= oy-20 && y <= oy+p;
+        }
+        case 'stroke': {
+            const bb = strokeBBox(obj.data.pts);
+            if (x < bb.x-20 || x > bb.x+bb.w+20 || y < bb.y-20 || y > bb.y+bb.h+20) return false;
+            return obj.data.pts.some(pt => Math.hypot(x-pt.x, y-pt.y) < 14);
+        }
+    }
+    return false;
+}
+
+function moveObj(obj, dx, dy) {
+    switch (obj.type) {
+        case 'circle':   obj.data.cx += dx; obj.data.cy += dy; break;
+        case 'triangle': case 'square': obj.data.x += dx; obj.data.y += dy; break;
+        case 'arrow':
+            obj.data.x1 += dx; obj.data.y1 += dy;
+            obj.data.x2 += dx; obj.data.y2 += dy; break;
+        case 'text':   obj.data.x += dx; obj.data.y += dy; break;
+        case 'stroke': obj.data.pts = obj.data.pts.map(p => ({x: p.x+dx, y: p.y+dy})); break;
+    }
+}
+
+function eraseAt(p) {
+    const before = S.objects.length;
+    S.objects = S.objects.filter(o => !hitTest(o, p.x, p.y));
+    if (S.objects.length !== before) redrawAll();
+}
+
+function strokeBBox(pts) {
+    const xs = pts.map(p => p.x), ys = pts.map(p => p.y);
+    const x  = Math.min(...xs),   y  = Math.min(...ys);
+    return { x, y, w: Math.max(...xs) - x, h: Math.max(...ys) - y };
+}
+
+// ══════════════════════════════════════════════════
+// SHAPE FINALIZE
+// ══════════════════════════════════════════════════
+
+function finalizeShape() {
+    const {x: x1, y: y1} = S.startPt, {x: x2, y: y2} = S.curPt;
+    const dist = Math.hypot(x2-x1, y2-y1);
+    const fx2  = dist < 12 ? x1 + 80 : x2;
+    const fy2  = dist < 12 ? y1 + 80 : y2;
+    const id   = genId();
+    let obj    = null;
+
+    switch (S.tool) {
+        case 'circle': {
+            const cx = (x1+fx2)/2, cy = (y1+fy2)/2;
+            obj = { id, type: 'circle', data: { cx, cy, rx: Math.abs(fx2-x1)/2, ry: Math.abs(fy2-y1)/2 }, selected: false };
+            break;
+        }
+        case 'triangle': {
+            const x = Math.min(x1,fx2), y = Math.min(y1,fy2);
+            obj = { id, type: 'triangle', data: { x, y, w: Math.abs(fx2-x1), h: Math.abs(fy2-y1) }, selected: false };
+            break;
+        }
+        case 'square': {
+            const x = Math.min(x1,fx2), y = Math.min(y1,fy2);
+            obj = { id, type: 'square', data: { x, y, w: Math.abs(fx2-x1), h: Math.abs(fy2-y1) }, selected: false };
+            break;
+        }
+        case 'arrow':
+            obj = { id, type: 'arrow', data: { x1, y1, x2: fx2, y2: fy2 }, selected: false };
+            break;
+    }
+
+    if (obj) {
+        S.objects.push(obj);
+        redrawAll();
+        triggerSpawn(S.tool, id, x1, y1);
+    }
+}
+
+// ══════════════════════════════════════════════════
+// FREE DRAW SHAPE DETECTION
+// ══════════════════════════════════════════════════
+
+function runFreeDetect(strokeObj) {
+    const pts   = strokeObj.data.pts;
+    const shape = classifyStroke(pts);
+    if (!shape) return;
+
+    let finalShape = shape;
+    if (shape === 'circle' && prevShape === 'circle' && Date.now() - prevShapeTs < 3000) {
+        const last2 = S.objects.filter(o => o.type === 'stroke').slice(-2);
+        if (last2.length === 2) {
+            const b1 = strokeBBox(last2[0].data.pts), b2 = strokeBBox(last2[1].data.pts);
+            if (!(b1.x+b1.w < b2.x || b2.x+b2.w < b1.x || b1.y+b1.h < b2.y || b2.y+b2.h < b1.y))
+                finalShape = 'doubleCircle';
+        }
+    }
+    prevShape   = shape;
+    prevShapeTs = Date.now();
+
+    showDetectLabel(finalShape, strokeObj.data.pts);
+    triggerShape(finalShape);
+}
+
+function classifyStroke(pts) {
+    if (pts.length < 8) return null;
+    const bb = strokeBBox(pts);
+    if (Math.max(bb.w, bb.h) < 26) return null;
+
+    const first = pts[0], last = pts[pts.length-1];
+    const closeDist = Math.hypot(last.x-first.x, last.y-first.y);
+    const isClosed  = closeDist < Math.hypot(bb.w, bb.h) * 0.42;
+
+    if (!isClosed) {
+        const totalLen = pts.reduce((l, p, i) => i === 0 ? 0 : l + Math.hypot(p.x-pts[i-1].x, p.y-pts[i-1].y), 0);
+        return Math.hypot(last.x-first.x, last.y-first.y) / Math.max(totalLen, 1) > 0.28 ? 'arrow' : null;
+    }
+
+    const step = Math.max(1, Math.floor(pts.length / 20));
+    const s    = pts.filter((_, i) => i % step === 0);
+    let corners = 0;
+    for (let i = 1; i < s.length-1; i++) {
+        const a = s[i-1], b = s[i], c = s[i+1];
+        const ab = {x:b.x-a.x, y:b.y-a.y}, bc = {x:c.x-b.x, y:c.y-b.y};
+        const mag = Math.hypot(ab.x,ab.y) * Math.hypot(bc.x,bc.y);
+        if (mag < 0.1) continue;
+        const ang = Math.acos(Math.max(-1, Math.min(1, (ab.x*bc.x+ab.y*bc.y)/mag))) * 180/Math.PI;
+        if (ang > 38 && ang < 148) corners++;
+    }
+
+    const aspect = Math.min(bb.w,bb.h) / Math.max(bb.w,bb.h);
+    if (corners <= 3 || aspect > 0.68) return 'circle';
+    if (corners >= 7) return 'square';
+    return 'triangle';
+}
+
+function showDetectLabel(shape, pts) {
+    const icons = { circle:'○', doubleCircle:'◎', triangle:'△', square:'□', arrow:'→' };
+    const bb    = strokeBBox(pts);
+    const el    = document.createElement('div');
+    el.className   = 'det-label';
+    el.textContent = icons[shape] || '?';
+    // Convert world coords → panel-relative screen coords
+    el.style.left    = (bb.x * VIEW.scale + VIEW.tx + bb.w * VIEW.scale / 2 - 7) + 'px';
+    el.style.top     = Math.max(4, bb.y * VIEW.scale + VIEW.ty - 22) + 'px';
+    el.style.opacity = '1';
+    document.getElementById('cp').appendChild(el);
+    setTimeout(() => { el.style.opacity = '0'; }, 100);
+    setTimeout(() => el.remove(), 1700);
+}
+
+// ══════════════════════════════════════════════════
+// TERMINAL ENGINE
+// ══════════════════════════════════════════════════
+
+const tb   = document.getElementById('tb');
+let tQueue = [];
+let tBusy  = false;
+
+function enqueue(cmd, lines, cls = 't-out') {
+    tQueue.push({ cmd, lines, cls });
+    if (!tBusy) pump();
+}
+
+async function pump() {
+    if (!tQueue.length) { tBusy = false; return; }
+    tBusy = true;
+    const { cmd, lines, cls } = tQueue.shift();
+    if (cmd) await typeCmd(cmd);
+    await printLines(lines, cls);
+    pump();
+}
+
+function typeCmd(text) {
+    return new Promise(resolve => {
+        const el = mk('div', 't-cmd');
+        tb.appendChild(el); scroll();
+        let i = 0;
+        const t = setInterval(() => {
+            el.textContent = text.slice(0, ++i);
+            playClick(true);
+            scroll();
+            if (i >= text.length) { clearInterval(t); setTimeout(resolve, 60); }
+        }, 18);
+    });
+}
+
+function printLines(lines, cls = 't-out') {
+    return new Promise(resolve => {
+        let i = 0;
+        function next() {
+            if (i >= lines.length) { tb.appendChild(mk('div','t-sep')); scroll(); return resolve(); }
+            const raw = lines[i++];
+            const el  = mk('div', raw.startsWith('✓') ? 't-ok' : raw.startsWith('[') ? 't-dim' : cls);
+            el.textContent = raw;
+            tb.appendChild(el); scroll();
+            setTimeout(next, 15 + Math.random() * 22);
+        }
+        setTimeout(next, 65);
+    });
+}
+
+function printRaw(text, cls = 't-dim') {
+    const el = mk('div', cls); el.textContent = text; tb.appendChild(el); scroll();
+}
+
+function mk(tag, cls) {
+    const el = document.createElement(tag);
+    if (cls) el.className = cls;
+    return el;
+}
+
+function scroll() { tb.scrollTop = tb.scrollHeight; }
+function flushTerm() { tb.innerHTML = ''; tQueue = []; tBusy = false; }
+
+// ══════════════════════════════════════════════════
+// COMMAND LIBRARY
+// ══════════════════════════════════════════════════
+
+const cmdIdx = {};
+
+const CMDS = {
+    circle: [
+        { cmd: 'git init',
+          out: ["Initialized empty Git repository in ./.git/", "hint: Using 'main' as the initial branch.",
+                "→ scanning workspace...", "→ indexing 0 entries",
+                "→ writing HEAD: ref: refs/heads/main", "→ creating object store",
+                "→ initializing pack index", "✓ Repository ready. Start building."] },
+        { cmd: 'npm create vite@latest . -- --template vanilla',
+          out: ["✓ Scaffolding project in ./", "  installing dependencies...", "  added 42 packages in 3.2s",
+                "→ writing package.json", "→ writing vite.config.js",
+                "→ writing index.html", "→ writing src/main.js", "→ writing src/style.css",
+                "Done. Run:  npm install && npm run dev"] },
+        { cmd: 'python3 -m http.server 8080',
+          out: ["Serving HTTP on 0.0.0.0 port 8080...", "→ directory: /Users/99letters/project/",
+                "→ MIME types: html css js json md", "192.168.0.10 - [GET /] 200 -",
+                "192.168.0.10 - [GET /style.css] 200 -", "192.168.0.10 - [GET /app.js] 200 -"] },
+    ],
+    doubleCircle: [
+        { cmd: 'docker run -d -p 3000:3000 --name blackmirror node:18-alpine',
+          out: ["Unable to find image 'node:18-alpine' locally",
+                "  [1/5] sha256:3a2b4c ██████████   8.2 MB",
+                "  [2/5] sha256:7f8e9d ██████████  12.1 MB",
+                "  [3/5] sha256:1c2d3e ██████████   3.4 MB",
+                "  [4/5] sha256:9a8b7c ██████████  56.8 MB",
+                "  [5/5] sha256:5e4f3a ██████████  done",
+                "Digest: sha256:3f2a1b9e4c8d71f2...",
+                "→ Container starting...", "→ Binding 0.0.0.0:3000",
+                "→ Node.js v18.20.0 ready", "container ID: a3f2b1c4", "✓ Running."] },
+        { cmd: 'kubectl apply -f deployment.yaml',
+          out: ['deployment.apps/blackmirror created', 'service/blackmirror-svc created',
+                'ingress.networking.k8s.io/blackmirror-ing created', '',
+                'NAME               READY   STATUS    RESTARTS   AGE',
+                'blackmirror-7d9f   1/1     Running   0          3s',
+                'blackmirror-4a2c   1/1     Running   0          3s',
+                '→ load balancer: active', '→ health checks: passing', '✓ Deployment complete.'] },
+    ],
+    triangle: [
+        { cmd: 'git checkout -b feature/new-interface',
+          out: ["Switched to a new branch 'feature/new-interface'",
+                "→ diverged from main at commit c4a2f8b", "→ 0 commits ahead",
+                "→ tracking: origin/feature/new-interface",
+                "→ staged:   0 files", "→ unstaged: 0 files", "✓ Branch ready for development."] },
+        { cmd: 'npm run build',
+          out: ["> vite build", "", "vite v5.2.0 building for production...",
+                "  transforming (42)...", "  ✓ 42 modules transformed.",
+                "  dist/index.html             1.42 kB",
+                "  dist/assets/index.js       18.24 kB │ gzip: 6.18 kB",
+                "  dist/assets/style.css       4.11 kB │ gzip: 1.30 kB",
+                "✓ built in 1.24s"] },
+    ],
+    square: [
+        { cmd: 'docker build -t studio:latest .',
+          out: ['[+] Building 18.3s (9/9) FINISHED',
+                ' => [internal] load .dockerignore              0.0s',
+                ' => [1/5] FROM node:18-alpine@sha256:3f2a      3.2s',
+                ' => [2/5] WORKDIR /app                         0.1s',
+                ' => [3/5] COPY package*.json ./                0.1s',
+                ' => [4/5] RUN npm ci --silent                 14.4s',
+                ' => [5/5] COPY . .                             0.2s',
+                ' => exporting to image                         0.3s',
+                'Successfully built f8e2c4d1', 'Successfully tagged studio:latest', '✓ Image ready.'] },
+        { cmd: 'terraform apply -auto-approve',
+          out: ['Terraform will perform the following actions:',
+                '  + aws_s3_bucket.static_site', '  + aws_cloudfront_distribution.cdn',
+                '  + aws_route53_record.www', '', 'Plan: 3 to add, 0 to change, 0 to destroy.',
+                'aws_s3_bucket.static_site: Creating... [3s]',
+                'aws_cloudfront_distribution.cdn: Creating... [45s]',
+                'aws_route53_record.www: Creating... [2s]',
+                'Apply complete! Resources: 3 added, 0 changed.', '✓ Infrastructure deployed.'] },
+    ],
+    arrow: [
+        { cmd: "curl -sL https://api.endpoint.io/v2/stream | jq '.[]'",
+          out: ['  % Total    % Received  Avg Speed', '100  8421  100  8421      18234',
+                '{', '  "id": "stream_a3f2",', '  "status": "active",',
+                '  "events": 1024,', '  "latency": "12ms"', '}',
+                '{ "id": "stream_b7c1", "events": 891 }',
+                '→ 2 streams processed', '→ throughput: 2.1MB/s', '✓ Pipeline complete.'] },
+        { cmd: 'cat ./app.log | grep ERROR | sort | uniq -c | sort -rn | head',
+          out: ['     42 ERROR: connection timeout', '     17 ERROR: rate limit exceeded',
+                '      8 ERROR: invalid token', '      3 ERROR: 404 not found',
+                '→ 4 unique error types', '→ total: 70 errors in log',
+                '→ most frequent: timeout (60%)', '✓ Analysis complete.'] },
+    ],
+};
+
+function triggerShape(shape) {
+    const vars = CMDS[shape]; if (!vars) return;
+    const i = (cmdIdx[shape] || 0) % vars.length;
+    cmdIdx[shape] = i + 1;
+    enqueue(vars[i].cmd, vars[i].out);
+}
+
+function triggerSpawn(type, id, x, y) {
+    const tid = id.slice(0, 4).toUpperCase();
+    enqueue(`spawn node --type ${type} --id 0x${tid} --x ${Math.round(x)} --y ${Math.round(y)}`,
+        [`→ allocating SceneNode...`,
+         `→ type: ${type} | origin: (${Math.round(x)}, ${Math.round(y)})`,
+         `→ attaching to render tree`,
+         `→ running onMount() hooks`,
+         `→ registering event listeners`,
+         `✓ Node 0x${tid} mounted.`]);
+}
+
+// ══════════════════════════════════════════════════
+// TEXT TOOL
+// ══════════════════════════════════════════════════
+
+const textOverlay = document.getElementById('textOverlay');
+const textInput   = document.getElementById('ti2');
+
+function showTextInput(p) {
+    S.textPos = p;
+    // Convert world → panel-relative screen coords
+    const sx = p.x * VIEW.scale + VIEW.tx;
+    const sy = p.y * VIEW.scale + VIEW.ty;
+    textOverlay.style.display  = 'block';
+    textOverlay.style.left     = sx + 'px';
+    textOverlay.style.top      = (sy - 18) + 'px';
+    textInput.style.fontSize   = Math.max(10, Math.round(14 * VIEW.scale)) + 'px';
+    textInput.value = '';
+    textInput.focus();
+}
+
+function commitText() {
+    if (textOverlay.style.display === 'none') return;
+    const text = textInput.value.trim();
+    textOverlay.style.display = 'none';
+    if (!text || !S.textPos) return;
+    const id  = genId();
+    const obj = { id, type: 'text', data: { x: S.textPos.x, y: S.textPos.y, text }, selected: false };
+    S.objects.push(obj);
+    redrawAll();
+    echoText(text);
+    S.textPos = null;
+}
+
+textInput.addEventListener('keydown', e => {
+    if (e.key === 'Enter')  { e.preventDefault(); commitText(); }
+    if (e.key === 'Escape') { textOverlay.style.display = 'none'; }
+    e.stopPropagation();
+});
+
+function echoText(text) {
+    const low = text.toLowerCase();
+    if (low.includes('youtube') || low.includes('yt')) {
+        enqueue(`stdin > "${text}"`,
+            ['→ parsing input...', '→ keyword match: YOUTUBE', '→ triggering easter egg protocol...']);
+        setTimeout(triggerYouTube, 800);
+        return;
+    }
+    const tokens = text.split(/\s+/);
+    enqueue(`stdin > "${text}"`,
+        [`→ parsing input...`,
+         `→ length: ${text.length} chars  tokens: ${tokens.length}`,
+         `→ echo: ${text}`]);
+}
+
+// ══════════════════════════════════════════════════
+// YOUTUBE EASTER EGG
+// ══════════════════════════════════════════════════
+
+const YT_ASCII = `
+╔═══════════════════════════════════════════════╗
+║                                               ║
+║   ██╗   ██╗  ████████╗                       ║
+║   ╚██╗ ██╔╝     ██╔══╝                       ║
+║    ╚████╔╝      ██║                           ║
+║     ╚██╔╝       ██║                           ║
+║      ██║         ██║                           ║
+║      ╚═╝         ╚═╝                           ║
+║                                               ║
+║  ┌─────────────────────────────────────────┐  ║
+║  │                                         │  ║
+║  │  ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░   │  ║
+║  │  ░                                 ░   │  ║
+║  │  ░           ▶▶                    ░   │  ║
+║  │  ░          ▶▶▶▶▶▶▶▶▶             ░   │  ║
+║  │  ░           ▶▶                    ░   │  ║
+║  │  ░                                 ░   │  ║
+║  │  ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░   │  ║
+║  │                                         │  ║
+║  └─────────────────────────────────────────┘  ║
+║                                               ║
+║  > stream: initialized  latency: 12ms         ║
+║  > quality: 1080p60  codec: VP9               ║
+║  ████████████████████████████████  100%       ║
+║                                               ║
+╚═══════════════════════════════════════════════╝`.trim();
+
+function triggerYouTube() {
+    enqueue('curl -v --http2 "https://www.youtube.com/"', [
+        '* Trying 142.250.186.46:443...',
+        '* Connected to youtube.com port 443',
+        '* ALPN: offering h2',
+        '* TLS 1.3 using TLS_AES_128_GCM_SHA256',
+        '* Server certificate: *.google.com',
+        '< HTTP/2 200',
+        '< content-type: text/html; charset=utf-8',
+        '< content-length: 538985',
+        '→ parsing response body...',
+        '→ extracting media streams...',
+    ]);
+    setTimeout(() => {
+        const pre = mk('pre', 't-ascii'); pre.textContent = YT_ASCII; tb.appendChild(pre); scroll();
+    }, 1100);
+    setTimeout(() => {
+        enqueue('', ['▶  Stream initialized.',
+            '▶  Playing: 99letters / Black Mirror Board',
+            '', '   [ ████████████████████ 100% ] 0:00 / 3:24',
+            '   [ press any key to continue ]']);
+    }, 2000);
+}
+
+// ══════════════════════════════════════════════════
+// TERMINAL INPUT
+// ══════════════════════════════════════════════════
+
+document.getElementById('ti').addEventListener('keydown', e => {
+    if (e.key !== 'Enter') return;
+    const val = document.getElementById('ti').value.trim();
+    document.getElementById('ti').value = '';
+    if (!val) return;
+    const low = val.toLowerCase();
+    if (low === 'youtube' || low === 'yt' || low === 'youtube.com') {
+        enqueue(`stdin > "${val}"`, ['→ keyword match: YOUTUBE', '→ triggering easter egg...']);
+        setTimeout(triggerYouTube, 600);
+    } else if (low === 'clear' || low === 'flush') {
+        flushTerm();
+    } else if (low === 'help') {
+        enqueue('help', ['draw shapes on canvas:', '  ○  git init / npm create',
+            '  ◎  docker run / kubectl', '  △  git branch / build',
+            '  □  docker build / terraform', '  →  curl | jq / grep | sort',
+            '  T  text → stdin echo', '', 'type "youtube" for a surprise.']);
+    } else {
+        enqueue(val, [`${val.split(' ')[0]}: command not found`]);
+    }
+});
+
+// ══════════════════════════════════════════════════
+// AMBIENT TERMINAL
+// ══════════════════════════════════════════════════
+
+function ts() { return new Date().toTimeString().slice(0,8); }
+
+const AMBIENT = [
+    () => printRaw(`[monitor] ${ts()} — heartbeat OK`),
+    () => printRaw(`[watcher] watching ./src/**  —  no changes`),
+    () => printRaw(`[daemon]  gc pass: 0 objects freed`),
+    () => printRaw(`[npm]     ${18+Math.floor(Math.random()*6)} packages checked — all up to date`),
+    () => printRaw(`[sys]     mem: ${(118+Math.floor(Math.random()*20)).toFixed(0)}MB  uptime: ${Math.floor(Date.now()/1000%86400)}s`),
+    () => printRaw(`[net]     192.168.0.1 — ping: ${(7+Math.random()*5).toFixed(1)}ms`),
+];
+
+let ambientIdx = 0;
+function runAmbient() {
+    if (!tBusy) { AMBIENT[ambientIdx % AMBIENT.length](); ambientIdx++; }
+    setTimeout(runAmbient, 18000 + Math.random() * 8000);
+}
+
+// ══════════════════════════════════════════════════
+// TOOLBAR & KEYBOARD
+// ══════════════════════════════════════════════════
+
+const SHAPE_ICONS = { circle: '○', triangle: '△', square: '□', arrow: '→' };
+
+function setTool(tool) {
+    commitText();
+    S.tool = tool;
+    // All data-tool buttons
+    document.querySelectorAll('[data-tool]').forEach(b => b.classList.toggle('active', b.dataset.tool === tool));
+    // Shape main button
+    const shapeBtn = document.getElementById('shapeBtn');
+    if (SHAPE_ICONS[tool]) {
+        shapeBtn.textContent = SHAPE_ICONS[tool];
+        shapeBtn.classList.add('active');
+    } else {
+        shapeBtn.classList.remove('active');
+    }
+    canvas.style.cursor = tool === 'select' ? 'default' : tool === 'eraser' ? 'cell' : 'crosshair';
+    closeShapeMenu();
+}
+
+// Shape dropdown
+const shapeBtn     = document.getElementById('shapeBtn');
+const shapeSubmenu = document.getElementById('shapeSubmenu');
+
+function closeShapeMenu() { shapeSubmenu.classList.remove('open'); }
+
+shapeBtn.addEventListener('click', e => {
+    e.stopPropagation();
+    playClick(false);
+    shapeSubmenu.classList.toggle('open');
+});
+
+shapeSubmenu.querySelectorAll('[data-tool]').forEach(btn => {
+    btn.addEventListener('click', e => {
+        e.stopPropagation();
+        playClick(false);
+        setTool(btn.dataset.tool);
+    });
+});
+
+document.addEventListener('click', closeShapeMenu);
+
+// Non-shape toolbar buttons
+document.querySelectorAll('.tool-btn[data-tool]').forEach(btn => {
+    if (!btn.closest('#shapeSubmenu') && !btn.classList.contains('shape-main')) {
+        btn.addEventListener('click', () => { playClick(false); setTool(btn.dataset.tool); });
+    }
+});
+
+document.querySelectorAll('.w-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+        playClick(false);
+        S.lineWidth = parseFloat(btn.dataset.w);
+        document.querySelectorAll('.w-btn').forEach(b => b.classList.toggle('active', b === btn));
+    });
+});
+
+document.addEventListener('keydown', e => {
+    if (e.target.tagName === 'INPUT') return;
+    const map = { s:'select', p:'pen', e:'eraser', c:'circle', g:'triangle', q:'square', a:'arrow', t:'text',
+                  '1':'w1', '2':'w2', '3':'w3' };
+    const k = e.key.toLowerCase();
+    if (map[k] === 'w1') { S.lineWidth=1.5; document.querySelectorAll('.w-btn')[0].click(); return; }
+    if (map[k] === 'w2') { S.lineWidth=2.5; document.querySelectorAll('.w-btn')[1].click(); return; }
+    if (map[k] === 'w3') { S.lineWidth=4;   document.querySelectorAll('.w-btn')[2].click(); return; }
+    if (map[k]) setTool(map[k]);
+
+    if ((e.key === 'Delete' || e.key === 'Backspace') && S.selectedId) {
+        S.objects = S.objects.filter(o => o.id !== S.selectedId);
+        S.selectedId = null; redrawAll();
+    }
+    if (e.key === 'Escape') {
+        S.objects.forEach(o => o.selected = false);
+        S.selectedId = null; commitText(); closeShapeMenu(); redrawAll();
+    }
+});
+
+// ══════════════════════════════════════════════════
+// USAGE OVERLAY
+// ══════════════════════════════════════════════════
+
+function openUsage()  { document.getElementById('usageOverlay').classList.add('open'); }
+function closeUsage() { document.getElementById('usageOverlay').classList.remove('open'); }
+document.getElementById('usageOverlay').addEventListener('click', e => {
+    if (e.target === e.currentTarget) closeUsage();
+});
+
+// ══════════════════════════════════════════════════
+// UTILS
+// ══════════════════════════════════════════════════
+
+function genId() {
+    return Math.floor(Math.random() * 0xFFFF).toString(16).padStart(4,'0').toUpperCase();
+}
+
+function isShapeTool(t) { return ['circle','triangle','square','arrow'].includes(t); }
+
+function clearCanvas() {
+    S.objects = []; S.selectedId = null;
+    document.querySelectorAll('.det-label').forEach(el => el.remove());
+    redrawAll();
+}
+
+// ══════════════════════════════════════════════════
+// BOOT
+// ══════════════════════════════════════════════════
+
+function boot() {
+    enqueue('blackmirror --init --version 0.3.0', [
+        '99letters studio — all rights reserved',
+        '',
+        'loading kernel...',
+        '  canvas engine      ✓ ready',
+        '  object model       ✓ active',
+        '  shape detector     ✓ listening',
+        '  zoom engine        ✓ ready',
+        '  audio engine       ✓ standby',
+        '  terminal daemon    ✓ running',
+        '  ambient logger     ✓ started',
+        '',
+        'Draw on the canvas. The mirror responds.',
+        'Wheel to zoom · dbl-click to reset.',
+        'Type "help" or press USAGE for guidance.',
+    ]);
+}
+
+initCanvas();
+boot();
+setTimeout(runAmbient, 22000);
+</script>
+</body>
+</html>
