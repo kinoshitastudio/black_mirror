@@ -621,7 +621,7 @@
            MOBILE
         ══════════════════════════════════ */
         @media (max-width: 700px) {
-            main { flex-direction: column; }
+            main { flex-direction: column; overflow: hidden; }
 
             .toolbar {
                 width: 100%;
@@ -643,15 +643,39 @@
             .tool-btn   { width: 42px; height: 42px; flex-shrink: 0; font-size: 15px; }
             .w-btn      { width: 30px; height: 42px; flex-shrink: 0; }
 
-            .resize-handle { display: none; }
+            /* mobile: horizontal bar between canvas and terminal */
+            .resize-handle {
+                display: flex;
+                width: 100%;
+                height: 10px;
+                cursor: row-resize;
+                background: #111;
+                border-top: none;
+                border-bottom: none;
+                align-items: center;
+                justify-content: center;
+                flex-shrink: 0;
+                touch-action: none;
+            }
+            .resize-handle::after {
+                width: 36px;
+                height: 2px;
+                border-radius: 1px;
+            }
 
             .canvas-panel {
                 flex: none;
                 height: 44vh;
-                border-bottom: 1px solid var(--line);
+                width: 100%;
+                border-bottom: none;
+                min-height: 80px;
             }
 
-            .terminal-panel { width: 100%; flex: 1; }
+            .terminal-panel {
+                width: 100%;
+                flex: none;
+                min-height: 80px;
+            }
         }
     </style>
 </head>
@@ -2857,38 +2881,66 @@ document.addEventListener('keyup', e => {
 // ══════════════════════════════════════════════════
 
 (function initResize() {
-    const handle    = document.getElementById('resizeHandle');
-    const termPanel = document.getElementById('termPanel');
-    let active = false, startX = 0, startW = 0;
+    const handle      = document.getElementById('resizeHandle');
+    const termPanel   = document.getElementById('termPanel');
+    const canvasPanel = document.getElementById('cp');
+    const mainEl      = document.querySelector('main');
+    let active = false, startX = 0, startY = 0, startW = 0, startH = 0;
 
-    handle.addEventListener('mousedown', e => {
-        active  = true;
-        startX  = e.clientX;
-        startW  = termPanel.getBoundingClientRect().width;
+    function isMobile() { return window.innerWidth <= 700; }
+
+    // ── Pointer down ──────────────────────────────────
+    handle.addEventListener('pointerdown', e => {
+        active = true;
+        startX = e.clientX;
+        startY = e.clientY;
+        startW = termPanel.getBoundingClientRect().width;
+        startH = canvasPanel.getBoundingClientRect().height;
         handle.classList.add('active');
-        document.body.style.cursor     = 'col-resize';
+        handle.setPointerCapture(e.pointerId);
         document.body.style.userSelect = 'none';
+        if (!isMobile()) document.body.style.cursor = 'col-resize';
         e.preventDefault();
     });
 
-    document.addEventListener('mousemove', e => {
+    // ── Pointer move ──────────────────────────────────
+    handle.addEventListener('pointermove', e => {
         if (!active) return;
-        const main  = document.querySelector('main').getBoundingClientRect().width;
-        const avail = main - 46 - 6; // toolbar + handle
-        const delta = startX - e.clientX; // drag left → terminal grows
-        const newW  = Math.max(180, Math.min(avail - 180, startW + delta));
-        termPanel.style.width    = newW + 'px';
-        termPanel.style.minWidth = '0';
+        if (isMobile()) {
+            // Vertical drag — adjust canvas height
+            const delta  = e.clientY - startY;   // down → canvas grows
+            const totalH = mainEl.getBoundingClientRect().height;
+            const MIN    = 80;
+            const newH   = Math.max(MIN, Math.min(totalH - MIN - 10, startH + delta));
+            canvasPanel.style.height    = newH + 'px';
+            canvasPanel.style.minHeight = '0';
+            termPanel.style.height      = (totalH - newH - 10) + 'px'; // 10 = handle height
+            termPanel.style.minHeight   = '0';
+            termPanel.style.flex        = 'none';
+        } else {
+            // Horizontal drag — adjust terminal width
+            const mainW  = mainEl.getBoundingClientRect().width;
+            const avail  = mainW - 46 - 6;
+            const delta  = startX - e.clientX;   // drag left → terminal grows
+            const newW   = Math.max(180, Math.min(avail - 180, startW + delta));
+            termPanel.style.width    = newW + 'px';
+            termPanel.style.minWidth = '0';
+        }
         resizeCanvas();
+        e.preventDefault();
     });
 
-    document.addEventListener('mouseup', () => {
+    // ── Pointer up ────────────────────────────────────
+    handle.addEventListener('pointerup', endDrag);
+    handle.addEventListener('pointercancel', endDrag);
+
+    function endDrag() {
         if (!active) return;
         active = false;
         handle.classList.remove('active');
         document.body.style.cursor     = '';
         document.body.style.userSelect = '';
-    });
+    }
 })();
 
 // ══════════════════════════════════════════════════
