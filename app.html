@@ -734,9 +734,29 @@
 
             .terminal-panel {
                 width: 100%;
-                flex: none;
-                min-height: 80px;
+                flex: 1 1 auto;
+                min-height: 60px;
+                display: flex;
+                flex-direction: column;
+                /* Kill the transform-based glitch animation on mobile —
+                   a transformed ancestor becomes the containing block for
+                   position:fixed descendants, which breaks the pinned input. */
+                animation: none !important;
             }
+
+            /* Input row is pinned to the viewport bottom on mobile so resizing
+               the canvas/terminal split never hides it. */
+            .term-input-row {
+                position: fixed;
+                left: 0; right: 0; bottom: 0;
+                background: var(--ink);
+                border-top: 1px solid var(--line);
+                z-index: 150;
+                padding-bottom: calc(7px + env(safe-area-inset-bottom, 0px));
+            }
+            /* Reserve space at the bottom of the flex layout so the scrollable
+               terminal body + resize handle never sit under the fixed input. */
+            main { padding-bottom: calc(44px + env(safe-area-inset-bottom, 0px)); }
         }
     </style>
 </head>
@@ -790,6 +810,16 @@
             <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M9.5 1.5L12.5 4.5L5 12L1 13L2 9L9.5 1.5Z"/>
                 <line x1="7.5" y1="3.5" x2="10.5" y2="6.5"/>
+            </svg>
+        </button>
+
+        <!-- Path (click anchors = Illustrator-style pen) — hidden per product decision -->
+        <button class="tool-btn" id="pathBtn" data-tool="path" title="Path (N) · click anchors, Enter to finish" style="display:none">
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M2 11 Q4 3 7 7 Q10 11 12 3"/>
+                <rect x="1" y="10" width="2" height="2" fill="currentColor" stroke="none"/>
+                <rect x="11" y="2" width="2" height="2" fill="currentColor" stroke="none"/>
+                <circle cx="7" cy="7" r="1.2" fill="#fff"/>
             </svg>
         </button>
 
@@ -1047,7 +1077,7 @@ Local only. No upload. No account required.</pre>
   △  3 vertices (free edit)
   □  4 corners + 4 edge midpoints
   →  start + end endpoints
-  ✎  ~10 stroke control points</pre>
+  ✎✐ every vertex editable (pen strokes auto-simplified)</pre>
         <h3>FILL</h3>
         <pre><b>○</b>  outline  <b>●</b>  black  <b>◑</b>  grey  <b>□</b>  white
 Set before drawing, or apply to selected object.</pre>
@@ -1116,6 +1146,12 @@ const S = {
     editingTextId:   null,      // id of text object being re-edited, or null (new text)
     lastTapInfo:     null,      // {id, time} for double-tap detection
     penSnapClose:    false,     // true when pen tip is near the start point (auto-close ready)
+    // Path tool (click-to-place anchors, Illustrator-style)
+    // pathPts items: { x, y, h1: null|{x,y}, h2: null|{x,y} } — h1=incoming handle, h2=outgoing (absolute coords)
+    pathPts:         [],        // committed anchor points for the in-progress path
+    pathHover:       null,      // {x,y} current cursor pos for preview segment
+    pathSnapClose:   false,     // cursor near first anchor → closing
+    pathDrag:        null,      // { mode:'newHandle'|'moveAnchor'|'moveHandle', idx, which?, startPt, orig } while dragging in path tool
 };
 
 const VIEW = { scale: 1, tx: 0, ty: 0 };
@@ -1327,6 +1363,10 @@ function initCanvas() {
 
     // Double-click on text object → re-edit (desktop)
     canvas.addEventListener('dblclick', e => {
+        // Path tool: double-click commits the in-progress path (open)
+        if (S.tool === 'path' && S.pathPts.length > 0) {
+            e.preventDefault(); commitPath(false); return;
+        }
         if (S.tool !== 'select') return;
         const r  = canvas.getBoundingClientRect();
         const p  = getPos(e.clientX - r.left, e.clientY - r.top);
@@ -1502,11 +1542,18 @@ function onDown(cx, cy, isTouch = false) {
             const c   = getObjCenter(prevSel);
             const rot = prevSel.data.rotation || 0;
             const rp  = rot !== 0 ? rotPt(p, c, -rot) : { ...p };
-            const hitAnch = getAnchors(prevSel).find(a => Math.hypot(rp.x - a.x, rp.y - a.y) < 9 * tm / VIEW.scale);
+            // Tighter radius for dense stroke vertices so clicks between dots
+            // fall through to body-drag. Only genuine dot taps engage anchor edit.
+            const hitAnch = getAnchors(prevSel).find(a => {
+                const isDenseVertex = (prevSel.type === 'stroke' && a.kind === 'vertex');
+                const thresh = (isDenseVertex ? 4.5 : 9) * tm / VIEW.scale;
+                return Math.hypot(rp.x - a.x, rp.y - a.y) < thresh;
+            });
             if (hitAnch) {
                 S.anchorDrag = {
                     objId:      prevSel.id,
                     anchorId:   hitAnch.id,
+                    ptIdx:      hitAnch.ptIdx,
                     origBounds: getObjBounds(prevSel),
                     origData:   JSON.parse(JSON.stringify(prevSel.data)),
                 };
@@ -1572,6 +1619,66 @@ function onDown(cx, cy, isTouch = false) {
         return;
     }
 
+    // Path tool: Illustrator/Figma-style — click=corner anchor, drag=bezier handle,
+    // click existing anchor/handle to re-adjust before committing.
+    if (S.tool === 'path') {
+        const touch = S.lastPointerType === 'touch';
+        const hitPx  = touch ? 22 : 12; // screen px
+        const hitD   = hitPx / VIEW.scale;
+
+        // 1. Close the path by clicking the first anchor (need ≥2 anchors placed)
+        const first = S.pathPts[0];
+        if (first && S.pathPts.length >= 2
+            && Math.hypot(p.x - first.x, p.y - first.y) < hitD) {
+            // Starting a drag on the first anchor lets user ALSO adjust its incoming handle.
+            S.pathDrag = {
+                mode: 'closeAndDrag', idx: 0, startPt: { ...p },
+                orig: JSON.parse(JSON.stringify(S.pathPts[0])),
+            };
+            return;
+        }
+
+        // 2. Clicked on an existing anchor → move it (with its handles)
+        for (let i = 0; i < S.pathPts.length; i++) {
+            const a = S.pathPts[i];
+            if (Math.hypot(p.x - a.x, p.y - a.y) < hitD) {
+                S.pathDrag = {
+                    mode: 'moveAnchor', idx: i, startPt: { ...p },
+                    orig: JSON.parse(JSON.stringify(a)),
+                };
+                return;
+            }
+        }
+
+        // 3. Clicked on an existing handle endpoint → move that handle only
+        for (let i = 0; i < S.pathPts.length; i++) {
+            const a = S.pathPts[i];
+            for (const which of ['h1', 'h2']) {
+                const h = a[which];
+                if (h && Math.hypot(p.x - h.x, p.y - h.y) < hitD) {
+                    S.pathDrag = {
+                        mode: 'moveHandle', idx: i, which, startPt: { ...p },
+                        orig: JSON.parse(JSON.stringify(a)),
+                    };
+                    return;
+                }
+            }
+        }
+
+        // 4. Empty area → place a new corner anchor and start a handle drag.
+        // If the user just clicks (no drag) it stays a corner; if they drag, it becomes a smooth anchor.
+        const newAnchor = { x: p.x, y: p.y, h1: null, h2: null };
+        S.pathPts.push(newAnchor);
+        S.pathDrag = {
+            mode: 'newHandle', idx: S.pathPts.length - 1, startPt: { ...p },
+            orig: JSON.parse(JSON.stringify(newAnchor)),
+        };
+        S.pathHover    = { x: p.x, y: p.y };
+        S.pathSnapClose = false;
+        redrawAll();
+        return;
+    }
+
     S.isDown  = true;
     S.startPt = { ...p };
     S.curPt   = { ...p };
@@ -1588,6 +1695,41 @@ function onDown(cx, cy, isTouch = false) {
 function onMove(cx, cy) {
     const p = getPos(cx, cy);
     S.curPt = { ...p };
+
+    // Path tool: handle drag states, or hover preview
+    if (S.tool === 'path') {
+        if (S.pathDrag) {
+            const d  = S.pathDrag;
+            const pt = S.pathPts[d.idx];
+            if (!pt) return;
+            if (d.mode === 'newHandle' || d.mode === 'closeAndDrag') {
+                // Dragging outgoing handle; keep incoming mirrored for smooth curve.
+                pt.h2 = { x: p.x, y: p.y };
+                pt.h1 = { x: 2 * pt.x - p.x, y: 2 * pt.y - p.y };
+            } else if (d.mode === 'moveAnchor') {
+                const dx = p.x - d.startPt.x, dy = p.y - d.startPt.y;
+                pt.x = d.orig.x + dx; pt.y = d.orig.y + dy;
+                if (d.orig.h1) pt.h1 = { x: d.orig.h1.x + dx, y: d.orig.h1.y + dy };
+                if (d.orig.h2) pt.h2 = { x: d.orig.h2.x + dx, y: d.orig.h2.y + dy };
+            } else if (d.mode === 'moveHandle') {
+                pt[d.which] = { x: p.x, y: p.y };
+                // Mirror the opposite handle for smooth node feel
+                const other = d.which === 'h1' ? 'h2' : 'h1';
+                pt[other] = { x: 2 * pt.x - p.x, y: 2 * pt.y - p.y };
+            }
+            redrawAll();
+            return;
+        }
+        if (S.pathPts.length > 0) {
+            const first = S.pathPts[0];
+            const snapPx = S.lastPointerType === 'touch' ? 22 : 12;
+            S.pathSnapClose = S.pathPts.length >= 2
+                && Math.hypot(p.x - first.x, p.y - first.y) < snapPx / VIEW.scale;
+            S.pathHover = { x: p.x, y: p.y };
+            redrawAll();
+        }
+        return;
+    }
 
     // Anchor drag — deform shape (single-select only)
     if (S.anchorDrag) {
@@ -1707,6 +1849,30 @@ function onMove(cx, cy) {
 }
 
 function onUp() {
+    // Path tool: finalize any in-progress anchor/handle drag
+    if (S.tool === 'path') {
+        if (S.pathDrag) {
+            const d  = S.pathDrag;
+            const pt = S.pathPts[d.idx];
+            const moveTol = (S.lastPointerType === 'touch' ? 6 : 4) / VIEW.scale;
+            const movedFar = Math.hypot(S.curPt.x - d.startPt.x, S.curPt.y - d.startPt.y) > moveTol;
+            if (pt && d.mode === 'newHandle' && !movedFar) {
+                // Pure click, no drag → corner anchor (no handles)
+                pt.h1 = null; pt.h2 = null;
+            }
+            if (d.mode === 'closeAndDrag') {
+                // Commit closed path whether or not the first-anchor handle was adjusted.
+                S.pathDrag = null;
+                commitPath(true);
+                S.isDown = false;
+                return;
+            }
+            S.pathDrag = null;
+            redrawAll();
+        }
+        S.isDown = false;
+        return;
+    }
     if (S.anchorDrag)    { S.anchorDrag = null; saveHistory(); S.isDown = false; return; }
     if (S.rotateId)      { S.rotateId   = null; saveHistory(); S.isDown = false; return; }
     if (S.multiResizeId) { S.multiResizeId = null; S.multiResizeOrig = null; saveHistory(); S.isDown = false; return; }
@@ -1746,9 +1912,14 @@ function onUp() {
             const id  = genId();
             // Auto-close: snap the last point to the first when within range
             const closed = S.penSnapClose;
-            const pts = closed
+            const raw = closed
                 ? [...S.penPts.slice(0, -1), { ...S.penPts[0] }]  // replace tail with exact start
                 : [...S.penPts];
+            // Simplify freehand points so the editable anchors are reasonable in count.
+            // Epsilon scales with current view zoom so feel stays consistent.
+            const eps = 1.4 / VIEW.scale;
+            let pts = rdpSimplify(raw, eps);
+            if (closed && pts.length > 1) pts[pts.length - 1] = { ...pts[0] };
             const obj = { id, type: 'stroke', data: { pts, lw: S.lineWidth, rotation: 0, fill: null, closed }, selected: false };
             S.objects.push(obj);
             if (!closed) {
@@ -1779,6 +1950,8 @@ function redrawAll() {
     if (S.isDown && isShapeTool(S.tool) && S.startPt && S.curPt) renderPreview();
     // Pen stroke in-progress (snap state changes trigger full redraw)
     if (S.tool === 'pen' && S.penPts.length > 1) renderPenInProgress();
+    // Path tool: in-progress anchors + preview segment to cursor
+    if (S.tool === 'path' && S.pathPts.length > 0) renderPathInProgress();
 
     // Marquee selection rectangle
     if (S.marquee) {
@@ -1986,6 +2159,195 @@ function renderPenInProgress() {
     }
     ctx.restore();
     renderPenSnapIndicator();
+}
+
+// ── Path tool: in-progress render + commit + simplification ────────────────
+// Build the stroked path on ctx using committed anchors (with bezier handles).
+// Returns true if at least one segment was drawn.
+function _strokePathShape(ctxArg, pts, hover, closed) {
+    if (!pts.length) return false;
+    ctxArg.beginPath();
+    ctxArg.moveTo(pts[0].x, pts[0].y);
+    for (let i = 1; i < pts.length; i++) {
+        const a = pts[i-1], b = pts[i];
+        const c1 = a.h2 || { x: a.x, y: a.y };
+        const c2 = b.h1 || { x: b.x, y: b.y };
+        ctxArg.bezierCurveTo(c1.x, c1.y, c2.x, c2.y, b.x, b.y);
+    }
+    if (closed && pts.length >= 2) {
+        const a = pts[pts.length - 1], b = pts[0];
+        const c1 = a.h2 || { x: a.x, y: a.y };
+        const c2 = b.h1 || { x: b.x, y: b.y };
+        ctxArg.bezierCurveTo(c1.x, c1.y, c2.x, c2.y, b.x, b.y);
+    }
+    return true;
+}
+
+function renderPathInProgress() {
+    const pts = S.pathPts;
+    if (!pts.length) return;
+    const touch = S.lastPointerType === 'touch';
+    ctx.save();
+    // Committed curves (solid)
+    if (pts.length >= 2) {
+        ctx.strokeStyle = getStrokeColor(); ctx.lineWidth = S.lineWidth;
+        ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+        ctx.setLineDash([]);
+        _strokePathShape(ctx, pts, null, false);
+        ctx.stroke();
+    }
+    // Preview segment from last anchor to cursor (dashed, respects last anchor's outgoing handle)
+    if (S.pathHover && !S.pathDrag) {
+        const last = pts[pts.length - 1];
+        ctx.strokeStyle = 'rgba(30,111,224,0.6)';
+        ctx.lineWidth   = S.lineWidth;
+        ctx.setLineDash([5 / VIEW.scale, 3 / VIEW.scale]);
+        ctx.beginPath(); ctx.moveTo(last.x, last.y);
+        if (last.h2) {
+            ctx.bezierCurveTo(last.h2.x, last.h2.y, S.pathHover.x, S.pathHover.y, S.pathHover.x, S.pathHover.y);
+        } else {
+            ctx.lineTo(S.pathHover.x, S.pathHover.y);
+        }
+        ctx.stroke();
+        ctx.setLineDash([]);
+    }
+    // Handle guide lines + handle endpoints
+    const r   = (touch ? 6   : 3.5) / VIEW.scale;
+    const hr  = (touch ? 5   : 3)   / VIEW.scale; // handle endpoint radius
+    const lw  = (touch ? 1.6 : 1.2) / VIEW.scale;
+    ctx.strokeStyle = 'rgba(30,111,224,0.55)';
+    ctx.lineWidth   = 1 / VIEW.scale;
+    ctx.setLineDash([]);
+    pts.forEach(a => {
+        if (a.h1) { ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(a.h1.x, a.h1.y); ctx.stroke(); }
+        if (a.h2) { ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(a.h2.x, a.h2.y); ctx.stroke(); }
+    });
+    // Anchor dots
+    pts.forEach((a, i) => {
+        const isDragAnchor = S.pathDrag && S.pathDrag.idx === i
+                             && (S.pathDrag.mode === 'moveAnchor' || S.pathDrag.mode === 'newHandle');
+        ctx.fillStyle   = (i === 0 || isDragAnchor) ? '#1e6fe0' : '#ffffff';
+        ctx.strokeStyle = '#1e6fe0';
+        ctx.lineWidth   = lw;
+        const rr = isDragAnchor ? r * 1.35 : r;
+        ctx.beginPath(); ctx.arc(a.x, a.y, rr, 0, Math.PI * 2);
+        ctx.fill(); ctx.stroke();
+    });
+    // Handle endpoint squares
+    pts.forEach((a, i) => {
+        ['h1', 'h2'].forEach(which => {
+            const h = a[which];
+            if (!h) return;
+            const active = S.pathDrag && S.pathDrag.idx === i && S.pathDrag.which === which;
+            ctx.fillStyle   = active ? '#1e6fe0' : '#ffffff';
+            ctx.strokeStyle = '#1e6fe0';
+            ctx.lineWidth   = lw;
+            const s = (active ? hr * 1.3 : hr);
+            ctx.fillRect  (h.x - s, h.y - s, s * 2, s * 2);
+            ctx.strokeRect(h.x - s, h.y - s, s * 2, s * 2);
+        });
+    });
+    // First-anchor close halo
+    if (S.pathSnapClose && pts.length >= 2) {
+        const first = pts[0], rr = 11 / VIEW.scale;
+        ctx.strokeStyle = 'rgba(30,111,224,0.85)';
+        ctx.fillStyle   = 'rgba(30,111,224,0.12)';
+        ctx.lineWidth   = 1.5 / VIEW.scale;
+        ctx.beginPath(); ctx.arc(first.x, first.y, rr, 0, Math.PI * 2);
+        ctx.fill(); ctx.stroke();
+    }
+    ctx.restore();
+}
+
+// Sample a cubic bezier segment into N+1 flat pts (inclusive of start but excluding end,
+// which is added by the next segment). For the very last segment pass includeEnd=true.
+function _sampleCubic(p0, p1, p2, p3, N, out, includeEnd) {
+    for (let i = 0; i < N; i++) {
+        const t  = i / N;
+        const u  = 1 - t;
+        const x = u*u*u*p0.x + 3*u*u*t*p1.x + 3*u*t*t*p2.x + t*t*t*p3.x;
+        const y = u*u*u*p0.y + 3*u*u*t*p1.y + 3*u*t*t*p2.y + t*t*t*p3.y;
+        out.push({ x, y });
+    }
+    if (includeEnd) out.push({ x: p3.x, y: p3.y });
+}
+
+function commitPath(closed) {
+    const anchors = S.pathPts;
+    if (anchors.length >= 2) {
+        // Tessellate bezier segments into a flat pts[] that the existing stroke
+        // renderer + anchor-edit system can consume unchanged.
+        const STEPS = 24;
+        const flat  = [];
+        const hasAnyCurve = anchors.some(a => a.h1 || a.h2);
+        if (!hasAnyCurve) {
+            // Pure polyline — preserve anchors 1:1 for editing parity.
+            anchors.forEach(a => flat.push({ x: a.x, y: a.y }));
+            if (closed) flat.push({ x: anchors[0].x, y: anchors[0].y });
+        } else {
+            for (let i = 0; i < anchors.length - 1; i++) {
+                const a = anchors[i], b = anchors[i+1];
+                const straight = !a.h2 && !b.h1;
+                if (straight) {
+                    if (i === 0) flat.push({ x: a.x, y: a.y });
+                    flat.push({ x: b.x, y: b.y });
+                } else {
+                    const c1 = a.h2 || a, c2 = b.h1 || b;
+                    _sampleCubic(a, c1, c2, b, STEPS, flat, i === anchors.length - 2);
+                }
+            }
+            if (closed) {
+                const a = anchors[anchors.length - 1], b = anchors[0];
+                const straight = !a.h2 && !b.h1;
+                if (straight) flat.push({ x: b.x, y: b.y });
+                else {
+                    const c1 = a.h2 || a, c2 = b.h1 || b;
+                    _sampleCubic(a, c1, c2, b, STEPS, flat, true);
+                }
+            }
+        }
+        const id = genId();
+        const obj = {
+            id, type: 'stroke',
+            data: { pts: flat, lw: S.lineWidth, rotation: 0, fill: null, closed: !!closed },
+            selected: false,
+        };
+        S.objects.push(obj);
+        saveHistory();
+    }
+    S.pathPts = []; S.pathHover = null; S.pathSnapClose = false; S.pathDrag = null;
+    redrawAll();
+}
+
+// Ramer–Douglas–Peucker simplification for freehand strokes
+function rdpSimplify(pts, eps) {
+    if (pts.length < 3) return pts.slice();
+    const sqEps = eps * eps;
+    const keep  = new Uint8Array(pts.length);
+    keep[0] = keep[pts.length - 1] = 1;
+    const stack = [[0, pts.length - 1]];
+    while (stack.length) {
+        const [a, b] = stack.pop();
+        let maxD = 0, idx = -1;
+        const ax = pts[a].x, ay = pts[a].y;
+        const bx = pts[b].x, by = pts[b].y;
+        const dx = bx - ax, dy = by - ay;
+        const ll = dx*dx + dy*dy || 1;
+        for (let i = a + 1; i < b; i++) {
+            const px = pts[i].x - ax, py = pts[i].y - ay;
+            const t  = Math.max(0, Math.min(1, (px*dx + py*dy) / ll));
+            const cx = px - t*dx, cy = py - t*dy;
+            const d = cx*cx + cy*cy;
+            if (d > maxD) { maxD = d; idx = i; }
+        }
+        if (maxD > sqEps && idx > -1) {
+            keep[idx] = 1;
+            stack.push([a, idx], [idx, b]);
+        }
+    }
+    const out = [];
+    for (let i = 0; i < pts.length; i++) if (keep[i]) out.push(pts[i]);
+    return out;
 }
 
 function renderPreview() {
@@ -2218,8 +2580,10 @@ function hitTest(obj, x, y, extraPad = 0) {
         }
         case 'stroke': {
             const bb = strokeBBox(obj.data.pts);
-            if (px<bb.x-20||px>bb.x+bb.w+20||py<bb.y-20||py>bb.y+bb.h+20) return false;
-            return obj.data.pts.some(pt => Math.hypot(px-pt.x, py-pt.y) < 14);
+            const margin = 20 + extraPad;
+            if (px<bb.x-margin||px>bb.x+bb.w+margin||py<bb.y-margin||py>bb.y+bb.h+margin) return false;
+            const bodyR = 14 + extraPad; // touch (+14) → 28px, mouse → 14px
+            return obj.data.pts.some(pt => Math.hypot(px-pt.x, py-pt.y) < bodyR);
         }
         case 'image': {
             const {x: ox, y: oy, w, h} = obj.data;
@@ -2279,21 +2643,43 @@ function ensureTrianglePts(obj) {
 function getAnchors(obj) {
     switch (obj.type) {
 
-        // ── Circle: 4 cardinal handles on the ellipse outline ──────────────
+        // ── Circle: 4 cardinal vertex handles + 8-handle bbox for scale ────
         case 'circle': {
             const { cx, cy, rx, ry } = obj.data;
+            const bx = cx - rx, by = cy - ry, bw = 2 * rx, bh = 2 * ry;
             return [
                 { id:'top',   x:cx,    y:cy-ry, kind:'vertex' },
                 { id:'right', x:cx+rx, y:cy,    kind:'vertex' },
                 { id:'bot',   x:cx,    y:cy+ry, kind:'vertex' },
                 { id:'left',  x:cx-rx, y:cy,    kind:'vertex' },
+                { id:'tl', x:bx,       y:by,       kind:'bbox' },
+                { id:'tm', x:bx+bw/2,  y:by,       kind:'bbox' },
+                { id:'tr', x:bx+bw,    y:by,       kind:'bbox' },
+                { id:'rm', x:bx+bw,    y:by+bh/2,  kind:'bbox' },
+                { id:'br', x:bx+bw,    y:by+bh,    kind:'bbox' },
+                { id:'bm', x:bx+bw/2,  y:by+bh,    kind:'bbox' },
+                { id:'bl', x:bx,       y:by+bh,    kind:'bbox' },
+                { id:'lm', x:bx,       y:by+bh/2,  kind:'bbox' },
             ];
         }
 
-        // ── Triangle: 3 actual vertices ─────────────────────────────────────
+        // ── Triangle: 3 vertex handles + 8-handle bbox for scale ───────────
         case 'triangle': {
             ensureTrianglePts(obj);
-            return obj.data.pts.map((p, i) => ({ id:`v${i}`, x:p.x, y:p.y, kind:'vertex' }));
+            const vtx = obj.data.pts.map((p, i) => ({ id:`v${i}`, x:p.x, y:p.y, kind:'vertex' }));
+            const xs = obj.data.pts.map(p=>p.x), ys = obj.data.pts.map(p=>p.y);
+            const bx = Math.min(...xs), by = Math.min(...ys);
+            const bw = Math.max(...xs) - bx, bh = Math.max(...ys) - by;
+            return vtx.concat([
+                { id:'tl', x:bx,       y:by,       kind:'bbox' },
+                { id:'tm', x:bx+bw/2,  y:by,       kind:'bbox' },
+                { id:'tr', x:bx+bw,    y:by,       kind:'bbox' },
+                { id:'rm', x:bx+bw,    y:by+bh/2,  kind:'bbox' },
+                { id:'br', x:bx+bw,    y:by+bh,    kind:'bbox' },
+                { id:'bm', x:bx+bw/2,  y:by+bh,    kind:'bbox' },
+                { id:'bl', x:bx,       y:by+bh,    kind:'bbox' },
+                { id:'lm', x:bx,       y:by+bh/2,  kind:'bbox' },
+            ]);
         }
 
         // ── Square / Image: 8-handle bbox resize ────────────────────────────
@@ -2312,13 +2698,27 @@ function getAnchors(obj) {
             ];
         }
 
-        // ── Arrow: start + end endpoints ────────────────────────────────────
+        // ── Arrow: endpoints + 8-handle bbox for scale ─────────────────────
         case 'arrow': {
             const { x1, y1, x2, y2 } = obj.data;
-            return [
+            const bx = Math.min(x1, x2), by = Math.min(y1, y2);
+            const bw = Math.abs(x2 - x1), bh = Math.abs(y2 - y1);
+            const out = [
                 { id:'start', x:x1, y:y1, kind:'vertex' },
                 { id:'end',   x:x2, y:y2, kind:'vertex' },
             ];
+            // Suppress bbox handles for degenerate (zero-size) arrows to avoid overlap
+            if (bw > 2 || bh > 2) out.push(
+                { id:'tl', x:bx,       y:by,       kind:'bbox' },
+                { id:'tm', x:bx+bw/2,  y:by,       kind:'bbox' },
+                { id:'tr', x:bx+bw,    y:by,       kind:'bbox' },
+                { id:'rm', x:bx+bw,    y:by+bh/2,  kind:'bbox' },
+                { id:'br', x:bx+bw,    y:by+bh,    kind:'bbox' },
+                { id:'bm', x:bx+bw/2,  y:by+bh,    kind:'bbox' },
+                { id:'bl', x:bx,       y:by+bh,    kind:'bbox' },
+                { id:'lm', x:bx,       y:by+bh/2,  kind:'bbox' },
+            );
+            return out;
         }
 
         // ── Text: 6-handle bbox resize (no vertex concept) ──────────────────
@@ -2336,19 +2736,42 @@ function getAnchors(obj) {
             ];
         }
 
-        // ── Stroke (pen): evenly-sampled path points ─────────────────────────
+        // ── Stroke (pen/path): every path vertex is editable ─────────────────
+        // Freehand strokes are RDP-simplified on finalize, so the count stays
+        // manageable; path-tool strokes already have exactly the placed anchors.
+        // If a stroke happens to exceed MAX_HANDLES (legacy data), fall back to
+        // even downsampling so the canvas doesn't choke on thousands of handles.
         case 'stroke': {
             const pts = obj.data.pts;
             if (!pts || pts.length < 2) return [];
-            const MAX  = 12;
-            const step = Math.max(1, Math.floor((pts.length - 1) / (MAX - 1)));
+            // Evenly sample ~MAX anchors along the stroke so there is visible body
+            // between dots. Clicks between anchors fall through to whole-object drag;
+            // the underlying pts[] is unchanged so curve smoothing stays intact.
+            const MAX_HANDLES = 12;
+            if (pts.length <= MAX_HANDLES) {
+                return pts.map((p, i) => ({
+                    id: `p${i}`, x: p.x, y: p.y, kind: 'vertex', ptIdx: i,
+                }));
+            }
+            const step = Math.max(1, Math.floor((pts.length - 1) / (MAX_HANDLES - 1)));
             const result = [];
             for (let i = 0; i < pts.length - 1; i += step) {
                 result.push({ id:`p${i}`, x:pts[i].x, y:pts[i].y, kind:'vertex', ptIdx:i });
             }
-            // always include the last point
             const last = pts.length - 1;
             result.push({ id:`p${last}`, x:pts[last].x, y:pts[last].y, kind:'vertex', ptIdx:last });
+            // Add 8-handle bbox resize on top so the stroke can be scaled like a shape.
+            const bb = strokeBBox(pts);
+            result.push(
+                { id:'tl', x:bb.x,         y:bb.y,         kind:'bbox' },
+                { id:'tm', x:bb.x+bb.w/2,  y:bb.y,         kind:'bbox' },
+                { id:'tr', x:bb.x+bb.w,    y:bb.y,         kind:'bbox' },
+                { id:'rm', x:bb.x+bb.w,    y:bb.y+bb.h/2,  kind:'bbox' },
+                { id:'br', x:bb.x+bb.w,    y:bb.y+bb.h,    kind:'bbox' },
+                { id:'bm', x:bb.x+bb.w/2,  y:bb.y+bb.h,    kind:'bbox' },
+                { id:'bl', x:bb.x,         y:bb.y+bb.h,    kind:'bbox' },
+                { id:'lm', x:bb.x,         y:bb.y+bb.h/2,  kind:'bbox' },
+            );
             return result;
         }
 
@@ -2363,25 +2786,70 @@ function applyAnchor(obj, anchorId, nx, ny) {
 
     switch (obj.type) {
 
-        // ── Circle: drag cardinal point → resize one radius independently ───
+        // ── Circle: cardinal = one-radius edit, bbox = full scale ──────────
         case 'circle': {
-            if (anchorId === 'top'  ) obj.data.ry = Math.max(2, od.cy - ny);
-            if (anchorId === 'bot'  ) obj.data.ry = Math.max(2, ny - od.cy);
-            if (anchorId === 'right') obj.data.rx = Math.max(2, nx - od.cx);
-            if (anchorId === 'left' ) obj.data.rx = Math.max(2, od.cx - nx);
+            if (anchorId === 'top'  ) { obj.data.ry = Math.max(2, od.cy - ny); break; }
+            if (anchorId === 'bot'  ) { obj.data.ry = Math.max(2, ny - od.cy); break; }
+            if (anchorId === 'right') { obj.data.rx = Math.max(2, nx - od.cx); break; }
+            if (anchorId === 'left' ) { obj.data.rx = Math.max(2, od.cx - nx); break; }
+            // Bbox scale — recompute cx/cy/rx/ry from the new bounding box
+            if (!ob) break;
+            const { x: ox, y: oy, w: ow, h: oh } = ob;
+            const MIN = 4, fx = ox + ow, fy = oy + oh;
+            let nBx, nBy, nBw, nBh;
+            switch (anchorId) {
+                case 'tl': nBw=Math.max(MIN,fx-nx); nBh=Math.max(MIN,fy-ny); nBx=fx-nBw; nBy=fy-nBh; break;
+                case 'tm': nBx=ox; nBw=ow;          nBh=Math.max(MIN,fy-ny); nBy=fy-nBh; break;
+                case 'tr': nBx=ox; nBw=Math.max(MIN,nx-ox); nBh=Math.max(MIN,fy-ny); nBy=fy-nBh; break;
+                case 'rm': nBx=ox; nBy=oy; nBw=Math.max(MIN,nx-ox); nBh=oh; break;
+                case 'br': nBx=ox; nBy=oy; nBw=Math.max(MIN,nx-ox); nBh=Math.max(MIN,ny-oy); break;
+                case 'bm': nBx=ox; nBy=oy; nBw=ow; nBh=Math.max(MIN,ny-oy); break;
+                case 'bl': nBw=Math.max(MIN,fx-nx); nBx=fx-nBw; nBy=oy; nBh=Math.max(MIN,ny-oy); break;
+                case 'lm': nBw=Math.max(MIN,fx-nx); nBx=fx-nBw; nBy=oy; nBh=oh; break;
+                default: return;
+            }
+            obj.data.cx = nBx + nBw/2;
+            obj.data.cy = nBy + nBh/2;
+            obj.data.rx = Math.max(2, nBw/2);
+            obj.data.ry = Math.max(2, nBh/2);
             break;
         }
 
-        // ── Triangle: drag one vertex freely ────────────────────────────────
+        // ── Triangle: single vertex edit, or bbox scale ─────────────────────
         case 'triangle': {
-            const idx = parseInt(anchorId.slice(1)); // 'v0' → 0
-            if (!isNaN(idx) && od.pts) {
-                obj.data.pts = od.pts.map((p, i) => i === idx ? { x: nx, y: ny } : { ...p });
-                const xs = obj.data.pts.map(p => p.x), ys = obj.data.pts.map(p => p.y);
-                obj.data.x = Math.min(...xs); obj.data.y = Math.min(...ys);
-                obj.data.w = Math.max(...xs) - obj.data.x;
-                obj.data.h = Math.max(...ys) - obj.data.y;
+            if (anchorId && anchorId[0] === 'v') {
+                const idx = parseInt(anchorId.slice(1));
+                if (!isNaN(idx) && od.pts) {
+                    obj.data.pts = od.pts.map((p, i) => i === idx ? { x: nx, y: ny } : { ...p });
+                    const xs = obj.data.pts.map(p => p.x), ys = obj.data.pts.map(p => p.y);
+                    obj.data.x = Math.min(...xs); obj.data.y = Math.min(...ys);
+                    obj.data.w = Math.max(...xs) - obj.data.x;
+                    obj.data.h = Math.max(...ys) - obj.data.y;
+                }
+                break;
             }
+            // Bbox scale — scale all 3 vertices proportionally
+            if (!ob || !od.pts) break;
+            const { x: ox, y: oy, w: ow, h: oh } = ob;
+            const MIN = 4, fx = ox + ow, fy = oy + oh;
+            let nBx, nBy, nBw, nBh;
+            switch (anchorId) {
+                case 'tl': nBw=Math.max(MIN,fx-nx); nBh=Math.max(MIN,fy-ny); nBx=fx-nBw; nBy=fy-nBh; break;
+                case 'tm': nBx=ox; nBw=ow;          nBh=Math.max(MIN,fy-ny); nBy=fy-nBh; break;
+                case 'tr': nBx=ox; nBw=Math.max(MIN,nx-ox); nBh=Math.max(MIN,fy-ny); nBy=fy-nBh; break;
+                case 'rm': nBx=ox; nBy=oy; nBw=Math.max(MIN,nx-ox); nBh=oh; break;
+                case 'br': nBx=ox; nBy=oy; nBw=Math.max(MIN,nx-ox); nBh=Math.max(MIN,ny-oy); break;
+                case 'bm': nBx=ox; nBy=oy; nBw=ow; nBh=Math.max(MIN,ny-oy); break;
+                case 'bl': nBw=Math.max(MIN,fx-nx); nBx=fx-nBw; nBy=oy; nBh=Math.max(MIN,ny-oy); break;
+                case 'lm': nBw=Math.max(MIN,fx-nx); nBx=fx-nBw; nBy=oy; nBh=oh; break;
+                default: return;
+            }
+            const sx = nBw / (ow || 1), sy = nBh / (oh || 1);
+            obj.data.pts = od.pts.map(p => ({
+                x: nBx + (p.x - ox) * sx,
+                y: nBy + (p.y - oy) * sy,
+            }));
+            obj.data.x = nBx; obj.data.y = nBy; obj.data.w = nBw; obj.data.h = nBh;
             break;
         }
 
@@ -2407,10 +2875,31 @@ function applyAnchor(obj, anchorId, nx, ny) {
             break;
         }
 
-        // ── Arrow: drag either endpoint freely ──────────────────────────────
+        // ── Arrow: endpoint edit, or bbox scale ─────────────────────────────
         case 'arrow': {
-            if (anchorId === 'start') { obj.data.x1 = nx; obj.data.y1 = ny; }
-            if (anchorId === 'end'  ) { obj.data.x2 = nx; obj.data.y2 = ny; }
+            if (anchorId === 'start') { obj.data.x1 = nx; obj.data.y1 = ny; break; }
+            if (anchorId === 'end'  ) { obj.data.x2 = nx; obj.data.y2 = ny; break; }
+            // Bbox scale — scale both endpoints proportionally
+            if (!ob) break;
+            const { x: ox, y: oy, w: ow, h: oh } = ob;
+            const MIN = 4, fx = ox + ow, fy = oy + oh;
+            let nBx, nBy, nBw, nBh;
+            switch (anchorId) {
+                case 'tl': nBw=Math.max(MIN,fx-nx); nBh=Math.max(MIN,fy-ny); nBx=fx-nBw; nBy=fy-nBh; break;
+                case 'tm': nBx=ox; nBw=ow;          nBh=Math.max(MIN,fy-ny); nBy=fy-nBh; break;
+                case 'tr': nBx=ox; nBw=Math.max(MIN,nx-ox); nBh=Math.max(MIN,fy-ny); nBy=fy-nBh; break;
+                case 'rm': nBx=ox; nBy=oy; nBw=Math.max(MIN,nx-ox); nBh=oh; break;
+                case 'br': nBx=ox; nBy=oy; nBw=Math.max(MIN,nx-ox); nBh=Math.max(MIN,ny-oy); break;
+                case 'bm': nBx=ox; nBy=oy; nBw=ow; nBh=Math.max(MIN,ny-oy); break;
+                case 'bl': nBw=Math.max(MIN,fx-nx); nBx=fx-nBw; nBy=oy; nBh=Math.max(MIN,ny-oy); break;
+                case 'lm': nBw=Math.max(MIN,fx-nx); nBx=fx-nBw; nBy=oy; nBh=oh; break;
+                default: return;
+            }
+            const sx = nBw / (ow || 1), sy = nBh / (oh || 1);
+            obj.data.x1 = nBx + (od.x1 - ox) * sx;
+            obj.data.y1 = nBy + (od.y1 - oy) * sy;
+            obj.data.x2 = nBx + (od.x2 - ox) * sx;
+            obj.data.y2 = nBy + (od.y2 - oy) * sy;
             break;
         }
 
@@ -2441,31 +2930,125 @@ function applyAnchor(obj, anchorId, nx, ny) {
             break;
         }
 
-        // ── Stroke: move one sampled path point ─────────────────────────────
-        // Dragging a handle moves only that point; surrounding curve adjusts smoothly
-        // because the path uses quadratic bezier smoothing over all pts.
+        // ── Stroke: per-vertex edit, or 8-handle bbox scale ─────────────────
         case 'stroke': {
+            // Vertex drag — move one sampled path point
             if (ptIdx !== undefined && obj.data.pts[ptIdx] !== undefined) {
                 obj.data.pts[ptIdx] = { x: nx, y: ny };
+                break;
             }
+            // Bbox resize — scale all stored pts proportionally around the fixed corner
+            if (!ob || !od || !od.pts) break;
+            const { x: ox, y: oy, w: ow, h: oh } = ob;
+            const MIN = 4, fx = ox + ow, fy = oy + oh;
+            let nBx, nBy, nBw, nBh;
+            switch (anchorId) {
+                case 'tl': nBw=Math.max(MIN,fx-nx); nBh=Math.max(MIN,fy-ny); nBx=fx-nBw; nBy=fy-nBh; break;
+                case 'tm': nBx=ox; nBw=ow;          nBh=Math.max(MIN,fy-ny); nBy=fy-nBh; break;
+                case 'tr': nBx=ox; nBw=Math.max(MIN,nx-ox); nBh=Math.max(MIN,fy-ny); nBy=fy-nBh; break;
+                case 'rm': nBx=ox; nBy=oy; nBw=Math.max(MIN,nx-ox); nBh=oh; break;
+                case 'br': nBx=ox; nBy=oy; nBw=Math.max(MIN,nx-ox); nBh=Math.max(MIN,ny-oy); break;
+                case 'bm': nBx=ox; nBy=oy; nBw=ow; nBh=Math.max(MIN,ny-oy); break;
+                case 'bl': nBw=Math.max(MIN,fx-nx); nBx=fx-nBw; nBy=oy; nBh=Math.max(MIN,ny-oy); break;
+                case 'lm': nBw=Math.max(MIN,fx-nx); nBx=fx-nBw; nBy=oy; nBh=oh; break;
+                default: return;
+            }
+            const sx = nBw / (ow || 1), sy = nBh / (oh || 1);
+            obj.data.pts = od.pts.map(pt => ({
+                x: nBx + (pt.x - ox) * sx,
+                y: nBy + (pt.y - oy) * sy,
+            }));
             break;
         }
     }
 }
 
-// Draw anchor squares — called inside the rotation ctx.save/restore block
+// Draw anchors — vertex (circle) for path/shape pts, bbox (square) for resize handles.
+// Illustrator feel: circles on the actual path, squares on the bounding box.
 function drawAnchors(obj) {
     const anchors = getAnchors(obj);
     if (!anchors.length) return;
-    const sz = 8  / VIEW.scale;
-    const lw = 1.5/ VIEW.scale;
+    // Touch pointers get larger handles so anchors are easy to grab with a finger.
+    const touch = S.lastPointerType === 'touch';
+    const sz  = (touch ? 12  : 7)   / VIEW.scale; // half-side for square handles
+    const r   = (touch ? 7.5 : 4.5) / VIEW.scale; // radius for circle handles
+    const lw  = (touch ? 2   : 1.5) / VIEW.scale;
     ctx.save();
+    ctx.setLineDash([]);
+
+    // ── Guide lines: connect anchors to make the skeleton visible ──────────
+    // Triangle: draw edges between the 3 vertex handles
+    if (obj.type === 'triangle' && anchors.length === 3) {
+        ctx.beginPath();
+        ctx.moveTo(anchors[0].x, anchors[0].y);
+        ctx.lineTo(anchors[1].x, anchors[1].y);
+        ctx.lineTo(anchors[2].x, anchors[2].y);
+        ctx.closePath();
+        ctx.strokeStyle = 'rgba(30,111,224,0.28)';
+        ctx.lineWidth   = 1 / VIEW.scale;
+        ctx.stroke();
+    }
+    // Circle: draw cross-hairs between the 4 cardinal handles
+    if (obj.type === 'circle' && anchors.length === 4) {
+        ctx.beginPath();
+        ctx.moveTo(anchors[3].x, anchors[0].y); // left → top (horizontal + vertical)
+        ctx.lineTo(anchors[1].x, anchors[0].y);
+        ctx.moveTo(anchors[0].x, anchors[0].y);
+        ctx.lineTo(anchors[2].x, anchors[2].y);
+        ctx.strokeStyle = 'rgba(30,111,224,0.18)';
+        ctx.lineWidth   = 1 / VIEW.scale;
+        ctx.stroke();
+    }
+    // Stroke (pen): draw the path skeleton through the sampled anchor points
+    if (obj.type === 'stroke' && anchors.length >= 2) {
+        ctx.beginPath();
+        ctx.moveTo(anchors[0].x, anchors[0].y);
+        for (let i = 1; i < anchors.length; i++) {
+            ctx.lineTo(anchors[i].x, anchors[i].y);
+        }
+        ctx.strokeStyle = 'rgba(30,111,224,0.22)';
+        ctx.lineWidth   = 1 / VIEW.scale;
+        ctx.stroke();
+    }
+    // Arrow: line between start and end
+    if (obj.type === 'arrow' && anchors.length === 2) {
+        ctx.beginPath();
+        ctx.moveTo(anchors[0].x, anchors[0].y);
+        ctx.lineTo(anchors[1].x, anchors[1].y);
+        ctx.strokeStyle = 'rgba(30,111,224,0.22)';
+        ctx.lineWidth   = 1 / VIEW.scale;
+        ctx.stroke();
+    }
+
+    // ── Draw each anchor handle ─────────────────────────────────────────────
+    const activeId = (S.anchorDrag && S.anchorDrag.objId === obj.id) ? S.anchorDrag.anchorId : null;
     anchors.forEach(a => {
-        ctx.fillStyle   = '#ffffff';
+        const active = (a.id === activeId);
+        ctx.fillStyle   = active ? '#1e6fe0' : '#ffffff';
         ctx.strokeStyle = '#1e6fe0';
         ctx.lineWidth   = lw;
-        ctx.fillRect  (a.x-sz/2, a.y-sz/2, sz, sz);
-        ctx.strokeRect(a.x-sz/2, a.y-sz/2, sz, sz);
+        const rr = active ? r * 1.35 : r;
+        const ss = active ? sz * 1.25 : sz;
+        if (a.kind === 'vertex') {
+            // Hollow circle — Illustrator "smooth node" look
+            ctx.beginPath();
+            ctx.arc(a.x, a.y, rr, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.stroke();
+        } else {
+            ctx.fillRect  (a.x - ss/2, a.y - ss/2, ss, ss);
+            ctx.strokeRect(a.x - ss/2, a.y - ss/2, ss, ss);
+        }
+        // Touch halo around active anchor so a finger doesn't fully occlude it
+        if (active && touch) {
+            ctx.save();
+            ctx.strokeStyle = 'rgba(30,111,224,0.35)';
+            ctx.lineWidth   = 1 / VIEW.scale;
+            ctx.beginPath();
+            ctx.arc(a.x, a.y, (a.kind === 'vertex' ? rr : ss/2) + 10 / VIEW.scale, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.restore();
+        }
     });
     ctx.restore();
 }
@@ -2980,6 +3563,11 @@ function setTool(tool) {
     S.multiResizeId = null; S.multiResizeOrig = null;
     S.lastTapInfo   = null;
     S.penSnapClose  = false;
+    // Commit any in-progress path before switching away
+    if (S.pathPts && S.pathPts.length) {
+        if (tool !== 'path') commitPath(false);
+    }
+    S.pathHover = null; S.pathSnapClose = false; S.pathDrag = null;
     S.tool = tool;
     // Update [data-tool] active states (excludes #shapeBtn which has no data-tool)
     document.querySelectorAll('[data-tool]').forEach(b => b.classList.toggle('active', b.dataset.tool===tool));
@@ -3286,7 +3874,18 @@ document.addEventListener('keydown', e => {
         e.preventDefault();
         S.spaceDown=true; canvas.style.cursor='grab'; return;
     }
-    const map = {s:'select',p:'pen',e:'eraser',c:'circle',g:'triangle',q:'square',a:'arrow',t:'text'};
+    // Path tool: Enter commits (open), Backspace removes last anchor
+    if (S.tool === 'path' && S.pathPts.length > 0) {
+        if (e.key === 'Enter') { e.preventDefault(); commitPath(false); return; }
+        if (e.key === 'Backspace' || e.key === 'Delete') {
+            e.preventDefault();
+            S.pathPts.pop();
+            if (S.pathPts.length === 0) { S.pathHover = null; S.pathSnapClose = false; }
+            redrawAll();
+            return;
+        }
+    }
+    const map = {s:'select',p:'pen',n:'path',e:'eraser',c:'circle',g:'triangle',q:'square',a:'arrow',t:'text'};
     const k = e.key.toLowerCase();
     // Width shortcuts 1/2/3
     if (k === '1') { setLineWidth(1.5); return; }
@@ -3307,6 +3906,10 @@ document.addEventListener('keydown', e => {
         }
     }
     if (e.key==='Escape') {
+        // Cancel in-progress path without creating an object
+        if (S.pathPts && S.pathPts.length) {
+            S.pathPts = []; S.pathHover = null; S.pathSnapClose = false; S.pathDrag = null;
+        }
         S.objects.forEach(o => o.selected = false);
         S.selectedId = null; S.multiSelected = []; S.marquee = null;
         commitText(); closeFillPopover(); closeShapePopover(); closePenPopover(); redrawAll();
