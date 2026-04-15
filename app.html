@@ -7,6 +7,14 @@
     <style>
         *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
+        /* ── Global: block text selection on all UI chrome ── */
+        header, aside, .tool-popover, .logo-btn, .hbtn, .hlink,
+        .tool-btn, .w-btn, .toolbar, .term-hd, .shape-hint,
+        .fm-eyebrow, .fm-title, .fm-note, .pop-label, .pop-sep-line {
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
         :root {
             --ink:    #080808;
             --paper:  #FAFAF8;
@@ -38,7 +46,7 @@
         ══════════════════════════════════ */
         header {
             flex-shrink: 0;
-            height: 42px;
+            height: 50px;
             background: var(--wb);
             border-bottom: 1px solid var(--wb-border);
             display: flex;
@@ -46,6 +54,7 @@
             padding: 0 16px;
             gap: 12px;
             z-index: 100;
+            touch-action: manipulation;
         }
 
         .logo {
@@ -64,6 +73,144 @@
             letter-spacing: 0.1em;
             margin-left: 2px;
         }
+
+        /* ── Logo button ── */
+        .logo-btn {
+            background: none;
+            border: none;
+            padding: 0;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 0;
+            touch-action: manipulation;
+            -webkit-tap-highlight-color: transparent;
+            user-select: none;
+        }
+        .logo-btn:focus { outline: none; }
+        .logo-img {
+            height: 32px;
+            width: auto;
+            display: block;
+            object-fit: contain;
+        }
+        @media (max-width: 700px) {
+            .logo-img { height: 26px; }
+        }
+        /* Fallback text logo shown when img fails to load */
+        .logo-fallback {
+            font-size: 10px;
+            font-weight: bold;
+            letter-spacing: 0.22em;
+            color: #111;
+        }
+        .logo-fallback .logo-mark { color: #bbb; margin-right: 4px; }
+        .logo-fallback .logo-ver  { font-size: 8px; color: #bbb; letter-spacing: 0.1em; margin-left: 2px; }
+
+        /* ── Feedback modal ── */
+        #feedbackOverlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(8,8,8,0.55);
+            z-index: 10000;
+            align-items: center;
+            justify-content: center;
+        }
+        #feedbackOverlay.open { display: flex; }
+
+        #feedbackModal {
+            background: var(--wb);
+            border: 1px solid #111;
+            padding: 28px 32px 24px;
+            max-width: 400px;
+            width: calc(100% - 48px);
+            position: relative;
+            font-family: 'Courier New', Courier, monospace;
+        }
+
+        .fm-close {
+            position: absolute;
+            top: 12px; right: 14px;
+            background: none;
+            border: none;
+            font-size: 16px;
+            line-height: 1;
+            cursor: pointer;
+            color: #888;
+            touch-action: manipulation;
+            padding: 4px;
+        }
+        .fm-close:hover { color: #111; }
+
+        .fm-eyebrow {
+            font-size: 8px;
+            letter-spacing: 0.22em;
+            color: #aaa;
+            margin-bottom: 14px;
+        }
+        .fm-title {
+            font-size: 13px;
+            font-weight: bold;
+            letter-spacing: 0.1em;
+            color: #111;
+            margin-bottom: 10px;
+        }
+        .fm-body {
+            font-size: 11px;
+            line-height: 1.8;
+            color: #555;
+            margin-bottom: 22px;
+        }
+        .fm-body strong { color: #111; }
+
+        .fm-mail-btn {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            width: 100%;
+            min-height: 44px;
+            background: #111;
+            color: #FAFAF8;
+            border: none;
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 9px;
+            letter-spacing: 0.2em;
+            cursor: pointer;
+            text-decoration: none;
+            touch-action: manipulation;
+            -webkit-tap-highlight-color: transparent;
+            transition: background 0.15s;
+        }
+        .fm-mail-btn:hover { background: #333; }
+
+        .fm-note {
+            font-size: 8px;
+            color: #aaa;
+            letter-spacing: 0.1em;
+            margin-top: 12px;
+            text-align: center;
+        }
+
+        .fm-ig-link {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 7px;
+            min-height: 44px;
+            margin-top: 10px;
+            text-decoration: none;
+            color: #aaa;
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 9px;
+            letter-spacing: 0.16em;
+            border: 1px solid #e0e0e0;
+            transition: color 0.15s, border-color 0.15s;
+            touch-action: manipulation;
+            -webkit-tap-highlight-color: transparent;
+        }
+        .fm-ig-link:hover { color: #111; border-color: #999; }
 
         .header-right {
             margin-left: auto;
@@ -91,6 +238,9 @@
             padding: 3px 9px;
             cursor: pointer;
             transition: border-color 0.12s, color 0.12s;
+            touch-action: manipulation;
+            user-select: none;
+            -webkit-tap-highlight-color: transparent;
         }
 
         .hbtn:hover { border-color: #999; color: #111; }
@@ -131,6 +281,7 @@
             overflow: visible;
             position: relative;
             z-index: 200;
+            touch-action: manipulation;
         }
 
         .tool-btn {
@@ -149,6 +300,7 @@
             transition: border-color 0.1s, color 0.1s, background 0.1s;
             user-select: none;
             -webkit-tap-highlight-color: transparent;
+            touch-action: manipulation; /* prevent double-tap zoom */
         }
 
         .tool-btn svg { pointer-events: none; }
@@ -174,6 +326,7 @@
             flex-direction: column;
             padding: 4px;
             gap: 2px;
+            touch-action: manipulation;
         }
         .tool-popover .tool-btn { width: 36px; height: 34px; }
         /* Row of buttons inside a column-direction popover */
@@ -482,6 +635,7 @@
                 overflow-y: visible;
                 -webkit-overflow-scrolling: touch;
                 scrollbar-width: none;
+                touch-action: pan-x; /* allow horizontal scroll, block zoom */
             }
             .toolbar::-webkit-scrollbar { display: none; }
 
@@ -504,9 +658,14 @@
 <body>
 
 <header>
-    <div class="logo">
-        <span class="logo-mark">◼</span>BLACK MIRROR BOARD<span class="logo-ver">v0.8.1</span>
-    </div>
+    <button class="logo-btn" id="logoBtn" title="Kinoshita Studio — feedback &amp; contact" aria-label="Open feedback">
+        <img class="logo-img" src="logo.png" alt="BLACK MIRROR BOARD"
+             draggable="false"
+             onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
+        <span class="logo-fallback" style="display:none">
+            <span class="logo-mark">◼</span>BLACK MIRROR BOARD<span class="logo-ver">v0.9</span>
+        </span>
+    </button>
     <div class="header-right">
         <span class="zoom-label" id="zoomLabel">100%</span>
         <button class="hbtn" onclick="exportProject()" title="Save project as JSON">
@@ -584,6 +743,16 @@
 
         <!-- Text -->
         <button class="tool-btn" data-tool="text" title="Text (T)">T</button>
+        <div class="tool-sep"></div>
+
+        <!-- Export PNG -->
+        <button class="tool-btn" id="exportPngBtn" title="Export PNG (X)">
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="1.5" y="3" width="11" height="9" rx="1"/>
+                <polyline points="4.5,7.5 7,10 9.5,7.5"/>
+                <line x1="7" y1="2" x2="7" y2="10"/>
+            </svg>
+        </button>
     </aside>
 
     <!-- Canvas — white drawing surface -->
@@ -611,6 +780,41 @@
         </div>
     </section>
 </main>
+
+<!-- ── Feedback Modal ─────────────────────────────────────────── -->
+<div id="feedbackOverlay" role="dialog" aria-modal="true" aria-labelledby="feedbackTitle">
+    <div id="feedbackModal">
+        <button class="fm-close" id="feedbackClose" aria-label="Close">✕</button>
+        <div class="fm-eyebrow">KINOSHITA STUDIO — PROTOTYPE v0.9</div>
+        <div class="fm-title" id="feedbackTitle">◼ FEEDBACK &amp; CONTACT</div>
+        <div class="fm-body">
+            このプロトタイプへの<strong>要望・アイデア・バグ報告</strong>を歓迎します。<br>
+            あなたの声が次のバージョンを形づくります。<br><br>
+            <strong>Draw to Build.</strong> — 一緒に育てましょう。
+        </div>
+        <a class="fm-mail-btn"
+           href="mailto:kinoshita.studio@gmail.com?subject=Black%20Mirror%20Feedback"
+           target="_blank" rel="noopener">
+            <svg width="12" height="10" viewBox="0 0 12 10" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="0.5" y="0.5" width="11" height="9" rx="0"/>
+                <polyline points="0.5,0.5 6,5.5 11.5,0.5"/>
+            </svg>
+            SEND FEEDBACK — kinoshita.studio@gmail.com
+        </a>
+        <div class="fm-note">メーラーが起動します · no tracking · local only</div>
+        <a class="fm-ig-link"
+           href="https://www.instagram.com/tkinoshita99/"
+           target="_blank" rel="noopener noreferrer"
+           aria-label="Instagram @tkinoshita99">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="2" y="2" width="20" height="20" rx="5" ry="5"/>
+                <circle cx="12" cy="12" r="4.5"/>
+                <circle cx="17.5" cy="6.5" r="0.8" fill="currentColor" stroke="none"/>
+            </svg>
+            @tkinoshita99
+        </a>
+    </div>
+</div>
 
 <!-- Pen Popover — width options (position:fixed, never clipped) -->
 <div id="penPopover" class="tool-popover">
@@ -2622,6 +2826,8 @@ document.addEventListener('keydown', e => {
     if (k === '1') { setLineWidth(1.5); return; }
     if (k === '2') { setLineWidth(2.5); return; }
     if (k === '3') { setLineWidth(4);   return; }
+    // Export shortcut
+    if (k === 'x') { exportPng(); return; }
     if (map[k]) setTool(map[k]);
     if (e.key==='Delete' || e.key==='Backspace') {
         if (S.multiSelected.length > 0) {
@@ -2806,9 +3012,222 @@ function boot() {
     ]);
 }
 
+// ── Feedback Modal ─────────────────────────────────────────────────────────
+(function() {
+    const overlay = document.getElementById('feedbackOverlay');
+    const logoBtn = document.getElementById('logoBtn');
+    const closeBtn = document.getElementById('feedbackClose');
+
+    function openFeedback() {
+        overlay.classList.add('open');
+        // Prevent canvas interaction while modal is open
+        canvas.style.pointerEvents = 'none';
+        closeBtn.focus();
+    }
+
+    function closeFeedback() {
+        overlay.classList.remove('open');
+        canvas.style.pointerEvents = '';
+        logoBtn.focus();
+    }
+
+    logoBtn.addEventListener('click', openFeedback);
+    closeBtn.addEventListener('click', closeFeedback);
+
+    // Click outside modal box → close
+    overlay.addEventListener('click', e => {
+        if (e.target === overlay) closeFeedback();
+    });
+
+    // Esc key → close
+    document.addEventListener('keydown', e => {
+        if (e.key === 'Escape' && overlay.classList.contains('open')) closeFeedback();
+    });
+})();
+
 initCanvas();
 boot();
 setTimeout(runAmbient, 22000);
+
+// ── Export transparent PNG ─────────────────────────────────────────────────
+function exportPng() {
+    // Decide which objects to export
+    const selected = S.objects.filter(o => o.selected || S.multiSelected.includes(o.id));
+    const targets  = selected.length > 0 ? selected : S.objects;
+    if (targets.length === 0) {
+        enqueue('png > blackmirror.png', ['→ canvas is empty — nothing to export'], 't-err');
+        return;
+    }
+
+    // Terminal log sequence
+    const ts = new Date().toISOString().replace('T',' ').slice(0,19);
+    enqueue(`[SYSTEM] ${ts}`, [
+        '→ generating transparent PNG asset...',
+        `→ objects: ${targets.length}  mode: ${selected.length > 0 ? 'selection' : 'all'}`,
+        '→ rendering offscreen canvas...',
+        '→ encoding image/png...',
+        '[IO] asset saved to local storage.',
+    ]);
+
+    // Compute tight bounding box across all target objects
+    const PAD = 20;
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    for (const obj of targets) {
+        const b = getObjBounds(obj);
+        if (!b) continue;
+        minX = Math.min(minX, b.x - PAD);
+        minY = Math.min(minY, b.y - PAD);
+        maxX = Math.max(maxX, b.x + b.w + PAD);
+        maxY = Math.max(maxY, b.y + b.h + PAD);
+    }
+    const W = Math.max(1, Math.ceil(maxX - minX));
+    const H = Math.max(1, Math.ceil(maxY - minY));
+
+    // Render on an offscreen canvas — transparent background
+    const dpr = Math.min(window.devicePixelRatio || 1, 3); // cap at 3x for memory
+    const oc  = document.createElement('canvas');
+    oc.width  = W * dpr;
+    oc.height = H * dpr;
+    const oc2 = oc.getContext('2d');
+    oc2.scale(dpr, dpr);
+    oc2.translate(-minX, -minY);
+
+    // Temporarily redirect ctx to offscreen canvas, render, restore
+    const origCtx = ctx;
+    // We can't swap ctx (it's const), so we re-implement render using oc2
+    for (const obj of targets) {
+        const c   = getObjCenter(obj);
+        const rot = obj.data.rotation || 0;
+        oc2.save();
+        if (rot !== 0) {
+            oc2.translate(c.x, c.y); oc2.rotate(rot); oc2.translate(-c.x, -c.y);
+        }
+        renderObjectToCtx(oc2, obj);
+        oc2.restore();
+    }
+
+    // Download
+    const link = document.createElement('a');
+    link.download = `blackmirror-${Date.now()}.png`;
+    link.href = oc.toDataURL('image/png');
+    link.click();
+}
+
+// Renders a single object to an arbitrary 2d context (used by export)
+function renderObjectToCtx(c2, obj) {
+    const d = obj.data;
+    const lw = d.lineWidth || 2.2;
+
+    function base() {
+        c2.strokeStyle = '#0c0c0c';
+        c2.lineWidth   = lw;
+        c2.lineCap     = 'round';
+        c2.lineJoin    = 'round';
+        c2.fillStyle   = d.fill || 'none';
+    }
+    function applyFill() {
+        if (d.fill && d.fill !== 'none') c2.fill();
+        c2.stroke();
+    }
+
+    switch (obj.type) {
+        case 'circle': {
+            base(); c2.beginPath();
+            c2.ellipse(d.cx, d.cy, d.rx, d.ry, 0, 0, Math.PI*2);
+            applyFill(); break;
+        }
+        case 'triangle': {
+            base(); c2.beginPath();
+            c2.moveTo(d.pts[0].x, d.pts[0].y);
+            c2.lineTo(d.pts[1].x, d.pts[1].y);
+            c2.lineTo(d.pts[2].x, d.pts[2].y);
+            c2.closePath(); applyFill(); break;
+        }
+        case 'square': {
+            base(); c2.beginPath();
+            c2.rect(d.x, d.y, d.w, d.h);
+            applyFill(); break;
+        }
+        case 'arrow': {
+            const dx = d.x2 - d.x1, dy = d.y2 - d.y1;
+            const len = Math.sqrt(dx*dx + dy*dy) || 1;
+            const ux = dx/len, uy = dy/len;
+            const hw = Math.max(6, lw * 3.5);
+            const hlen = hw * 1.5;
+            const bx = d.x2 - ux * hlen, by = d.y2 - uy * hlen;
+            c2.strokeStyle = '#0c0c0c'; c2.lineWidth = lw;
+            c2.lineCap = 'round'; c2.lineJoin = 'round';
+            c2.beginPath(); c2.moveTo(d.x1, d.y1); c2.lineTo(bx, by); c2.stroke();
+            c2.beginPath();
+            c2.moveTo(d.x2, d.y2);
+            c2.lineTo(bx - uy*hw, by + ux*hw);
+            c2.lineTo(bx + uy*hw, by - ux*hw);
+            c2.closePath(); c2.fillStyle = '#0c0c0c'; c2.fill(); break;
+        }
+        case 'text': {
+            const fs = d.fontSize || 16;
+            c2.font         = `${fs}px 'Courier New', monospace`;
+            c2.fillStyle    = '#0c0c0c';
+            c2.textBaseline = 'top';
+            c2.fillText(d.text, d.x, d.y); break;
+        }
+        case 'stroke': {
+            if (!d.pts || d.pts.length < 2) break;
+            c2.strokeStyle = '#0c0c0c';
+            c2.lineWidth   = d.lw || lw;
+            c2.lineCap     = 'round'; c2.lineJoin = 'round';
+            c2.beginPath(); c2.moveTo(d.pts[0].x, d.pts[0].y);
+            for (let i = 1; i < d.pts.length; i++) {
+                const prev = d.pts[i-1], cur = d.pts[i];
+                c2.quadraticCurveTo(prev.x, prev.y, (prev.x+cur.x)/2, (prev.y+cur.y)/2);
+            }
+            c2.stroke(); break;
+        }
+    }
+}
+
+document.getElementById('exportPngBtn').addEventListener('click', () => {
+    playClick(false);
+    exportPng();
+});
+
+// ── Prevent browser zoom on UI elements (iOS Safari ignores user-scalable=no) ──
+// Block Safari gesture events globally
+document.addEventListener('gesturestart',  e => e.preventDefault(), { passive: false });
+document.addEventListener('gesturechange', e => e.preventDefault(), { passive: false });
+document.addEventListener('gestureend',    e => e.preventDefault(), { passive: false });
+
+// Block pinch-zoom touchmove on any element that is NOT the canvas
+// (canvas handles its own pinch internally via Pointer Events)
+document.addEventListener('touchmove', e => {
+    if (e.touches.length >= 2 && !e.target.closest('#mainCanvas')) {
+        e.preventDefault();
+    }
+}, { passive: false });
+
+// Block double-tap zoom on toolbar / header / popovers
+// by absorbing the second tap before the browser can act on it
+let _lastUITap = 0;
+['header', '.toolbar', '.tool-popover'].forEach(sel => {
+    document.querySelectorAll(sel).forEach(el => {
+        el.addEventListener('touchend', e => {
+            const now = Date.now();
+            if (now - _lastUITap < 350) {
+                e.preventDefault(); // kill the zoom
+            }
+            _lastUITap = now;
+        }, { passive: false });
+    });
+});
+
+// Block contextmenu (long-press on mobile, right-click on desktop) on all UI chrome
+// Prevents browser callout / text-selection popup from appearing on buttons/toolbar
+document.addEventListener('contextmenu', e => {
+    // Allow right-click only inside text inputs; block everywhere else (buttons, toolbar, canvas)
+    if (!e.target.closest('#ti') && !e.target.closest('#ti2')) {
+        e.preventDefault();
+    }
+});
 </script>
 </body>
 </html>
