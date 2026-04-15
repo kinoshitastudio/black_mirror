@@ -171,15 +171,25 @@
             border: 1px solid #ccc;
             box-shadow: 2px 4px 14px rgba(0,0,0,0.15);
             display: none;
+            flex-direction: column;
             padding: 4px;
             gap: 2px;
         }
         .tool-popover .tool-btn { width: 36px; height: 34px; }
+        /* Row of buttons inside a column-direction popover */
+        .pop-row { display: flex; flex-direction: row; gap: 2px; }
+        /* Thin separator line inside popover */
+        .pop-sep-line { height: 1px; background: #e0e0e0; margin: 2px 0; flex-shrink: 0; }
+        /* Small label inside popover */
+        .pop-label {
+            font-size: 8px; letter-spacing: 0.12em; color: #aaa;
+            padding: 0 2px; font-family: 'Courier New', monospace;
+        }
 
-        /* Width dots */
+        /* Width buttons — used inside pen-popover */
         .w-btn {
-            width: 34px;
-            height: 26px;
+            width: 36px;
+            height: 32px;
             background: none;
             border: 1px solid transparent;
             color: var(--wb-icon);
@@ -187,11 +197,12 @@
             display: flex;
             align-items: center;
             justify-content: center;
-            transition: color 0.1s;
+            transition: background 0.1s, border-color 0.1s;
+            border-radius: 2px;
         }
 
-        .w-btn:hover  { color: var(--wb-icon-hover); }
-        .w-btn.active { color: var(--wb-icon-active); }
+        .w-btn:hover  { background: #f4f4f4; border-color: #ddd; }
+        .w-btn.active { background: #efefef; border-color: #999; color: var(--wb-icon-active); }
 
         .w-dot {
             border-radius: 50%;
@@ -505,6 +516,12 @@
             <svg width="9" height="9" viewBox="0 0 9 9" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" style="vertical-align:-1px;margin-right:2px"><line x1="4.5" y1="6.5" x2="4.5" y2="1"/><polyline points="2,3.2 4.5,0.5 7,3.2"/><line x1="0.5" y1="8.5" x2="8.5" y2="8.5"/></svg>OPEN
             <input type="file" id="importFile" accept=".json" style="display:none">
         </label>
+        <button class="hbtn" id="undoBtn" onclick="undo()" title="Undo (Ctrl+Z)" disabled>
+            <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px;margin-right:2px"><path d="M2 3.5 Q2 1 5.5 1 Q9 1 9 5 Q9 9 5.5 9 L2.5 9"/><polyline points="4,7 2.5,9 4,11"/></svg>UNDO
+        </button>
+        <button class="hbtn" id="redoBtn" onclick="redo()" title="Redo (Ctrl+Y)" disabled>
+            <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px;margin-right:2px"><path d="M8 3.5 Q8 1 4.5 1 Q1 1 1 5 Q1 9 4.5 9 L7.5 9"/><polyline points="6,7 7.5,9 6,11"/></svg>REDO
+        </button>
         <button class="hbtn" onclick="clearCanvas()">CLEAR</button>
         <button class="hbtn" onclick="flushTerm()">FLUSH</button>
         <button class="hbtn" onclick="openUsage()">USAGE</button>
@@ -524,21 +541,12 @@
         </button>
         <div class="tool-sep"></div>
 
-        <!-- Pen + Width buttons immediately below/after -->
-        <button class="tool-btn" data-tool="pen" title="Pen (P)">
+        <!-- Pen (click = opens pen-popover with width options) -->
+        <button class="tool-btn" id="penBtn" data-tool="pen" title="Pen (P) · tap for width">
             <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M9.5 1.5L12.5 4.5L5 12L1 13L2 9L9.5 1.5Z"/>
                 <line x1="7.5" y1="3.5" x2="10.5" y2="6.5"/>
             </svg>
-        </button>
-        <button class="w-btn active" data-w="1.5" title="Thin (1)">
-            <span class="w-dot" style="width:3px;height:3px"></span>
-        </button>
-        <button class="w-btn" data-w="2.5" title="Medium (2)">
-            <span class="w-dot" style="width:6px;height:6px"></span>
-        </button>
-        <button class="w-btn" data-w="4" title="Thick (3)">
-            <span class="w-dot" style="width:10px;height:10px"></span>
         </button>
 
         <!-- Eraser -->
@@ -558,12 +566,18 @@
             </svg>
         </button>
 
-        <!-- Fill — paint bucket icon, opens #toolPopover (position:fixed, mobile-safe) -->
-        <button class="tool-btn" id="fillBtn" title="Fill mode (F)">
-            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M4 5 Q4 2 7 2 Q10 2 10 5"/>
-                <path d="M2 5 L3 12 L11 12 L12 5 Z"/>
-                <rect id="fillIndRect" x="4.5" y="6.5" width="5" height="4" rx="0.5" stroke-width="1.5"/>
+        <!-- Fill — paint bucket with drip, opens #toolPopover -->
+        <button class="tool-btn" id="fillBtn" title="Fill (F)">
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <!-- bucket body -->
+                <path d="M3 5.5 L2.2 11 L11.8 11 L11 5.5 Z"/>
+                <!-- bucket handle -->
+                <path d="M5.5 5.5 Q5.5 2.5 7 2.5 Q8.5 2.5 8.5 5.5"/>
+                <!-- fill indicator swatch -->
+                <rect id="fillIndRect" x="4" y="7" width="6" height="3.5" rx="0.4" stroke-width="1.4"/>
+                <!-- drip below bucket -->
+                <path d="M7 11 Q7.8 12.2 7 13.2" stroke-width="1.5"/>
+                <circle cx="7" cy="13.5" r="0.8" fill="currentColor" stroke="none"/>
             </svg>
         </button>
         <div class="tool-sep"></div>
@@ -598,36 +612,74 @@
     </section>
 </main>
 
-<!-- Shape Popover — ○ △ □ → (position:fixed, never clipped) -->
-<div id="shapePopover" class="tool-popover">
-    <button class="tool-btn" data-tool="circle" title="Circle (C)">
-        <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="2"><circle cx="7" cy="7" r="5"/></svg>
-    </button>
-    <button class="tool-btn" data-tool="triangle" title="Triangle (G)">
-        <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><polygon points="7,2 13,12 1,12"/></svg>
-    </button>
-    <button class="tool-btn" data-tool="square" title="Square (Q)">
-        <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><rect x="2" y="2" width="10" height="10"/></svg>
-    </button>
-    <button class="tool-btn" data-tool="arrow" title="Arrow (A)">
-        <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="2" y1="7" x2="12" y2="7"/><polyline points="8,3.5 12,7 8,10.5"/></svg>
-    </button>
+<!-- Pen Popover — width options (position:fixed, never clipped) -->
+<div id="penPopover" class="tool-popover">
+    <span class="pop-label">WIDTH</span>
+    <div class="pop-row">
+        <button class="w-btn active" data-w="1.5" title="Thin (1)">
+            <span class="w-dot" style="width:3px;height:3px"></span>
+        </button>
+        <button class="w-btn" data-w="2.5" title="Medium (2)">
+            <span class="w-dot" style="width:6px;height:6px"></span>
+        </button>
+        <button class="w-btn" data-w="4" title="Thick (3)">
+            <span class="w-dot" style="width:10px;height:10px"></span>
+        </button>
+    </div>
 </div>
 
-<!-- Fill Popover — none/black/grey/white (position:fixed, never clipped) -->
+<!-- Shape Popover — ○ △ □ → + Fill (position:fixed, never clipped) -->
+<div id="shapePopover" class="tool-popover">
+    <span class="pop-label">SHAPE</span>
+    <div class="pop-row">
+        <button class="tool-btn" data-tool="circle" title="Circle (C)">
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="2"><circle cx="7" cy="7" r="5"/></svg>
+        </button>
+        <button class="tool-btn" data-tool="triangle" title="Triangle (G)">
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><polygon points="7,2 13,12 1,12"/></svg>
+        </button>
+        <button class="tool-btn" data-tool="square" title="Square (Q)">
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><rect x="2" y="2" width="10" height="10"/></svg>
+        </button>
+        <button class="tool-btn" data-tool="arrow" title="Arrow (A)">
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="2" y1="7" x2="12" y2="7"/><polyline points="8,3.5 12,7 8,10.5"/></svg>
+        </button>
+    </div>
+    <div class="pop-sep-line"></div>
+    <span class="pop-label">FILL</span>
+    <div class="pop-row">
+        <button class="tool-btn" data-fill="none"  title="No fill">
+            <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="1" width="10" height="10"/></svg>
+        </button>
+        <button class="tool-btn" data-fill="black" title="Fill black">
+            <svg width="12" height="12" viewBox="0 0 12 12"><rect x="1" y="1" width="10" height="10" fill="#111" stroke="#111" stroke-width="1"/></svg>
+        </button>
+        <button class="tool-btn" data-fill="grey"  title="Fill grey">
+            <svg width="12" height="12" viewBox="0 0 12 12"><rect x="1" y="1" width="10" height="10" fill="rgba(0,0,0,0.25)" stroke="#888" stroke-width="1.5"/></svg>
+        </button>
+        <button class="tool-btn" data-fill="white" title="Fill white">
+            <svg width="12" height="12" viewBox="0 0 12 12"><rect x="1" y="1" width="10" height="10" fill="#FAFAF8" stroke="#aaa" stroke-width="1.5"/></svg>
+        </button>
+    </div>
+</div>
+
+<!-- Fill Popover — (toolbar fill button popup, position:fixed, never clipped) -->
 <div id="toolPopover" class="tool-popover">
-    <button class="tool-btn" data-fill="none"  title="No fill">
-        <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="1" width="10" height="10"/></svg>
-    </button>
-    <button class="tool-btn" data-fill="black" title="Fill black">
-        <svg width="12" height="12" viewBox="0 0 12 12"><rect x="1" y="1" width="10" height="10" fill="#111" stroke="#111" stroke-width="1"/></svg>
-    </button>
-    <button class="tool-btn" data-fill="grey"  title="Fill grey">
-        <svg width="12" height="12" viewBox="0 0 12 12"><rect x="1" y="1" width="10" height="10" fill="rgba(0,0,0,0.25)" stroke="#888" stroke-width="1.5"/></svg>
-    </button>
-    <button class="tool-btn" data-fill="white" title="Fill white">
-        <svg width="12" height="12" viewBox="0 0 12 12"><rect x="1" y="1" width="10" height="10" fill="#FAFAF8" stroke="#aaa" stroke-width="1.5"/></svg>
-    </button>
+    <span class="pop-label">FILL</span>
+    <div class="pop-row">
+        <button class="tool-btn" data-fill="none"  title="No fill">
+            <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="1" width="10" height="10"/></svg>
+        </button>
+        <button class="tool-btn" data-fill="black" title="Fill black">
+            <svg width="12" height="12" viewBox="0 0 12 12"><rect x="1" y="1" width="10" height="10" fill="#111" stroke="#111" stroke-width="1"/></svg>
+        </button>
+        <button class="tool-btn" data-fill="grey"  title="Fill grey">
+            <svg width="12" height="12" viewBox="0 0 12 12"><rect x="1" y="1" width="10" height="10" fill="rgba(0,0,0,0.25)" stroke="#888" stroke-width="1.5"/></svg>
+        </button>
+        <button class="tool-btn" data-fill="white" title="Fill white">
+            <svg width="12" height="12" viewBox="0 0 12 12"><rect x="1" y="1" width="10" height="10" fill="#FAFAF8" stroke="#aaa" stroke-width="1.5"/></svg>
+        </button>
+    </div>
 </div>
 
 <!-- Usage overlay -->
@@ -1241,11 +1293,11 @@ function onMove(cx, cy) {
 }
 
 function onUp() {
-    if (S.anchorDrag)    { S.anchorDrag = null; S.isDown = false; return; }
-    if (S.rotateId)      { S.rotateId   = null; S.isDown = false; return; }
-    if (S.multiResizeId) { S.multiResizeId = null; S.multiResizeOrig = null; S.isDown = false; return; }
-    if (S.multiRotId)    { S.multiRotId = false; S.isDown = false; return; }
-    if (S.multiDragOff)  { S.multiDragOff = null; S.isDown = false; return; }
+    if (S.anchorDrag)    { S.anchorDrag = null; saveHistory(); S.isDown = false; return; }
+    if (S.rotateId)      { S.rotateId   = null; saveHistory(); S.isDown = false; return; }
+    if (S.multiResizeId) { S.multiResizeId = null; S.multiResizeOrig = null; saveHistory(); S.isDown = false; return; }
+    if (S.multiRotId)    { S.multiRotId = false; saveHistory(); S.isDown = false; return; }
+    if (S.multiDragOff)  { S.multiDragOff = null; saveHistory(); S.isDown = false; return; }
 
     // Marquee finalize
     if (S.marquee) {
@@ -1283,9 +1335,11 @@ function onUp() {
             clearTimeout(detectTimer);
             detectTimer = setTimeout(() => runFreeDetect(obj), 400);
         }
-        S.penPts = []; redrawAll();
+        S.penPts = []; saveHistory(); redrawAll();
     } else if (isShapeTool(S.tool) && S.startPt) {
         finalizeShape();
+    } else if (S.dragOff) {
+        saveHistory(); // object was moved
     }
     S.dragOff = null;
 }
@@ -1685,7 +1739,7 @@ function moveObj(obj, dx, dy) {
 function eraseAt(p, extraPad = 0) {
     const before = S.objects.length;
     S.objects = S.objects.filter(o => !hitTest(o, p.x, p.y, extraPad));
-    if (S.objects.length !== before) redrawAll();
+    if (S.objects.length !== before) { saveHistory(); redrawAll(); }
 }
 
 function strokeBBox(pts) {
@@ -1848,7 +1902,7 @@ function finalizeShape() {
             obj = { id, type:'arrow', data:{x1,y1,x2:fx2,y2:fy2,rotation:0,fill:null}, selected:false }; break;
     }
 
-    if (obj) { S.objects.push(obj); redrawAll(); triggerSpawn(S.tool, id, x1, y1); }
+    if (obj) { S.objects.push(obj); saveHistory(); redrawAll(); triggerSpawn(S.tool, id, x1, y1); }
 }
 
 // ══════════════════════════════════════════════════
@@ -2163,13 +2217,13 @@ function commitText() {
         }
         S.editingTextId = null;
         S.textPos = null;
-        redrawAll();
+        saveHistory(); redrawAll();
         return;
     }
     if (!text || !S.textPos) { S.textPos = null; return; }
     const id = genId();
     S.objects.push({ id, type:'text', data:{x:S.textPos.x,y:S.textPos.y,text,fontSize:16,rotation:0}, selected:false });
-    redrawAll(); echoText(text); S.textPos = null;
+    saveHistory(); redrawAll(); echoText(text); S.textPos = null;
 }
 
 textInput.addEventListener('keydown', e => {
@@ -2312,8 +2366,57 @@ function setTool(tool) {
         shapeBtn.classList.remove('active');
     }
     if (!S.spaceDown) canvas.style.cursor = toolCursor(tool);
-    closeShapePopover();
+    // Don't close shape popover when selecting a shape from within it
+    // (so user can also pick fill right after). Only close if switching away from shapes.
+    if (!SHAPE_SVGS[tool]) closeShapePopover();
     closeFillPopover();
+    closePenPopover();
+}
+
+// ══════════════════════════════════════════════════
+// UNDO / REDO
+// ══════════════════════════════════════════════════
+
+const HISTORY_MAX = 60;
+const _history  = [JSON.stringify([])];  // initial empty state
+let   _histIdx  = 0;
+
+function saveHistory() {
+    const snap = JSON.stringify(S.objects);
+    if (_history[_histIdx] === snap) return; // no change
+    _history.splice(_histIdx + 1);           // drop redo branch
+    _history.push(snap);
+    if (_history.length > HISTORY_MAX) _history.shift();
+    else _histIdx++;
+    updateUndoRedoBtns();
+}
+
+function _restoreHistory() {
+    S.objects = JSON.parse(_history[_histIdx]);
+    S.selectedId = null; S.multiSelected = [];
+    S.anchorDrag = null; S.rotateId = null;
+    S.multiResizeId = null; S.multiResizeOrig = null;
+    redrawAll();
+    updateUndoRedoBtns();
+}
+
+function undo() {
+    if (_histIdx <= 0) return;
+    _histIdx--;
+    _restoreHistory();
+}
+
+function redo() {
+    if (_histIdx >= _history.length - 1) return;
+    _histIdx++;
+    _restoreHistory();
+}
+
+function updateUndoRedoBtns() {
+    const u = document.getElementById('undoBtn');
+    const r = document.getElementById('redoBtn');
+    if (u) u.disabled = _histIdx <= 0;
+    if (r) r.disabled = _histIdx >= _history.length - 1;
 }
 
 // ── Shape popover ──────────────────────────────────────────────────────────
@@ -2329,16 +2432,27 @@ function closeShapePopover() {
 function openShapePopover() {
     const r      = shapeBtn.getBoundingClientRect();
     const mobile = window.innerWidth <= 700;
-    shapePopover.style.flexDirection = mobile ? 'row' : 'column';
-    shapePopover.style.left = mobile ? r.left + 'px' : (r.right + 4) + 'px';
-    shapePopover.style.top  = mobile ? (r.bottom + 4) + 'px' : r.top + 'px';
-    shapePopover.style.display = 'flex';
+    shapePopover.style.bottom = 'auto';
+    if (mobile) {
+        // Toolbar is at the TOP — open popover BELOW the button
+        shapePopover.style.display = 'flex'; // show first to measure
+        const pw = shapePopover.offsetWidth || 160;
+        let left = r.left;
+        if (left + pw > window.innerWidth - 8) left = window.innerWidth - pw - 8;
+        if (left < 8) left = 8;
+        shapePopover.style.left = left + 'px';
+        shapePopover.style.top  = (r.bottom + 4) + 'px';
+    } else {
+        shapePopover.style.left = (r.right + 4) + 'px';
+        shapePopover.style.top  = r.top + 'px';
+        shapePopover.style.display = 'flex';
+    }
     shapePopoverOpen = true;
 }
 
 shapeBtn.addEventListener('click', e => {
     e.stopPropagation(); playClick(false);
-    closeFillPopover();
+    closeFillPopover(); closePenPopover();
     if (shapePopoverOpen) { closeShapePopover(); return; }
     openShapePopover();
 });
@@ -2347,6 +2461,69 @@ shapePopover.querySelectorAll('[data-tool]').forEach(btn => {
     btn.addEventListener('click', e => {
         e.stopPropagation(); playClick(false);
         setTool(btn.dataset.tool);
+        // Keep popover open so user can also pick fill
+    });
+});
+
+// Fill buttons inside shape popover
+shapePopover.querySelectorAll('[data-fill]').forEach(btn => {
+    btn.addEventListener('click', e => {
+        e.stopPropagation(); playClick(false);
+        setFill(btn.dataset.fill);
+        closeShapePopover();
+    });
+});
+
+// ── Pen popover — width options ────────────────────────────────────────────
+const penBtn      = document.getElementById('penBtn');
+const penPopover  = document.getElementById('penPopover');
+let   penPopoverOpen = false;
+
+function closePenPopover() {
+    penPopover.style.display = 'none';
+    penPopoverOpen = false;
+}
+
+function openPenPopover() {
+    const r      = penBtn.getBoundingClientRect();
+    const mobile = window.innerWidth <= 700;
+    penPopover.style.bottom = 'auto';
+    if (mobile) {
+        // Toolbar is at the TOP — open popover BELOW the button
+        penPopover.style.display = 'flex';
+        const pw = penPopover.offsetWidth || 100;
+        let left = r.left;
+        if (left + pw > window.innerWidth - 8) left = window.innerWidth - pw - 8;
+        if (left < 8) left = 8;
+        penPopover.style.left = left + 'px';
+        penPopover.style.top  = (r.bottom + 4) + 'px';
+    } else {
+        penPopover.style.left = (r.right + 4) + 'px';
+        penPopover.style.top  = r.top + 'px';
+        penPopover.style.display = 'flex';
+    }
+    penPopoverOpen = true;
+}
+
+penBtn.addEventListener('click', e => {
+    e.stopPropagation(); playClick(false);
+    const wasOpen = penPopoverOpen;
+    setTool('pen');
+    closeShapePopover(); closeFillPopover();
+    if (wasOpen) { closePenPopover(); return; }
+    openPenPopover();
+});
+
+function setLineWidth(w) {
+    S.lineWidth = w;
+    document.querySelectorAll('.w-btn').forEach(b => b.classList.toggle('active', parseFloat(b.dataset.w) === w));
+}
+
+penPopover.querySelectorAll('.w-btn').forEach(btn => {
+    btn.addEventListener('click', e => {
+        e.stopPropagation(); playClick(false);
+        setLineWidth(parseFloat(btn.dataset.w));
+        closePenPopover();
     });
 });
 
@@ -2356,8 +2533,6 @@ const fillIndRect = document.getElementById('fillIndRect');
 const toolPopover = document.getElementById('toolPopover');
 let   fillPopoverOpen = false;
 
-// Display is controlled entirely via inline styles — no className toggle.
-// This avoids the specificity bug where style.display='none' overrides CSS classes.
 function closeFillPopover() {
     toolPopover.style.display = 'none';
     fillPopoverOpen = false;
@@ -2366,16 +2541,24 @@ function closeFillPopover() {
 function openFillPopover() {
     const r      = fillBtn.getBoundingClientRect();
     const mobile = window.innerWidth <= 700;
-    // Position & layout
-    toolPopover.style.flexDirection = mobile ? 'row' : 'column';
-    toolPopover.style.left = mobile ? r.left + 'px' : (r.right + 4) + 'px';
-    toolPopover.style.top  = mobile ? (r.bottom + 4) + 'px' : r.top + 'px';
-    // Set display LAST so position is already resolved before the element appears
-    toolPopover.style.display = 'flex';
+    toolPopover.style.bottom = 'auto';
+    if (mobile) {
+        // Toolbar is at the TOP — open popover BELOW the button
+        toolPopover.style.display = 'flex';
+        const pw = toolPopover.offsetWidth || 120;
+        let left = r.left;
+        if (left + pw > window.innerWidth - 8) left = window.innerWidth - pw - 8;
+        if (left < 8) left = 8;
+        toolPopover.style.left = left + 'px';
+        toolPopover.style.top  = (r.bottom + 4) + 'px';
+    } else {
+        toolPopover.style.left = (r.right + 4) + 'px';
+        toolPopover.style.top  = r.top + 'px';
+        toolPopover.style.display = 'flex';
+    }
     fillPopoverOpen = true;
 }
 
-// Fill indicator visuals keyed by fillId
 const FILL_INDICATOR = {
     none:  { fill: 'none',            stroke: 'currentColor', sw: '1.5' },
     black: { fill: '#111',            stroke: '#111',          sw: '1'   },
@@ -2389,10 +2572,10 @@ function setFill(fillId) {
     fillIndRect.setAttribute('fill',         ind.fill);
     fillIndRect.setAttribute('stroke',       ind.stroke);
     fillIndRect.setAttribute('stroke-width', ind.sw);
-    // Apply to single selected object immediately
     const sel = S.objects.find(o => o.selected);
     if (sel && sel.type !== 'arrow' && sel.type !== 'stroke' && sel.type !== 'text') {
         sel.data.fill = FILL_COLORS[fillId];
+        saveHistory();
         redrawAll();
     }
     closeFillPopover();
@@ -2400,6 +2583,7 @@ function setFill(fillId) {
 
 fillBtn.addEventListener('click', e => {
     e.stopPropagation(); playClick(false);
+    closePenPopover(); closeShapePopover();
     if (fillPopoverOpen) { closeFillPopover(); return; }
     openFillPopover();
 });
@@ -2412,48 +2596,46 @@ toolPopover.querySelectorAll('[data-fill]').forEach(btn => {
 });
 
 // Close all popovers on any outside click
-document.addEventListener('click', () => { closeFillPopover(); closeShapePopover(); });
+document.addEventListener('click', () => { closeFillPopover(); closeShapePopover(); closePenPopover(); });
 
 document.querySelectorAll('.tool-btn[data-tool]').forEach(btn => {
-    // Skip shapePopover buttons — they have their own dedicated listener above
-    if (btn.closest('#shapePopover')) return;
+    // Skip buttons inside popovers — they have their own dedicated listeners
+    if (btn.closest('#shapePopover') || btn.closest('#penPopover')) return;
+    // Skip penBtn — handled above with popover logic
+    if (btn.id === 'penBtn') return;
     btn.addEventListener('click', () => { playClick(false); setTool(btn.dataset.tool); });
-});
-
-document.querySelectorAll('.w-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-        playClick(false);
-        S.lineWidth = parseFloat(btn.dataset.w);
-        document.querySelectorAll('.w-btn').forEach(b => b.classList.toggle('active', b===btn));
-    });
 });
 
 document.addEventListener('keydown', e => {
     if (e.target.tagName==='INPUT') return;
+    // Undo / Redo
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z' && !e.shiftKey) { e.preventDefault(); undo(); return; }
+    if ((e.ctrlKey || e.metaKey) && (e.key.toLowerCase() === 'y' || (e.key.toLowerCase() === 'z' && e.shiftKey))) { e.preventDefault(); redo(); return; }
     // Space → pan mode
     if (e.code==='Space' && !e.repeat) {
         e.preventDefault();
         S.spaceDown=true; canvas.style.cursor='grab'; return;
     }
-    const map = {s:'select',p:'pen',e:'eraser',c:'circle',g:'triangle',q:'square',a:'arrow',t:'text','1':'w1','2':'w2','3':'w3'};
+    const map = {s:'select',p:'pen',e:'eraser',c:'circle',g:'triangle',q:'square',a:'arrow',t:'text'};
     const k = e.key.toLowerCase();
-    if (map[k]==='w1') { S.lineWidth=1.5; document.querySelectorAll('.w-btn')[0].click(); return; }
-    if (map[k]==='w2') { S.lineWidth=2.5; document.querySelectorAll('.w-btn')[1].click(); return; }
-    if (map[k]==='w3') { S.lineWidth=4;   document.querySelectorAll('.w-btn')[2].click(); return; }
+    // Width shortcuts 1/2/3
+    if (k === '1') { setLineWidth(1.5); return; }
+    if (k === '2') { setLineWidth(2.5); return; }
+    if (k === '3') { setLineWidth(4);   return; }
     if (map[k]) setTool(map[k]);
     if (e.key==='Delete' || e.key==='Backspace') {
         if (S.multiSelected.length > 0) {
             S.objects = S.objects.filter(o => !S.multiSelected.includes(o.id));
-            S.multiSelected = []; redrawAll();
+            S.multiSelected = []; saveHistory(); redrawAll();
         } else if (S.selectedId) {
             S.objects = S.objects.filter(o => o.id !== S.selectedId);
-            S.selectedId = null; redrawAll();
+            S.selectedId = null; saveHistory(); redrawAll();
         }
     }
     if (e.key==='Escape') {
         S.objects.forEach(o => o.selected = false);
         S.selectedId = null; S.multiSelected = []; S.marquee = null;
-        commitText(); closeFillPopover(); closeShapePopover(); redrawAll();
+        commitText(); closeFillPopover(); closeShapePopover(); closePenPopover(); redrawAll();
     }
 });
 
