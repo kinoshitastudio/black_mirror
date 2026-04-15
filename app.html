@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>BLACK MIRROR BOARD v0.9.0</title>
+    <title>BLACK MIRROR BOARD v0.9.5</title>
     <style>
         *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -617,6 +617,67 @@
         }
         .usage-close:hover { border-color: var(--glow); color: var(--glow); }
 
+        /* ── DARK CANVAS MODE ─────────────────────────────────────────────── */
+        body.bm-dark .canvas-panel { background: #000000; }
+        body.bm-dark .canvas-panel::before {
+            background-image:
+                linear-gradient(rgba(255,255,255,0.055) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(255,255,255,0.055) 1px, transparent 1px);
+        }
+        body.bm-dark .toolbar {
+            background: #080808;
+            border-right-color: #1e1e1e;
+        }
+        body.bm-dark .toolbar .tool-btn        { color: rgba(255,255,255,0.44); }
+        body.bm-dark .toolbar .tool-btn:hover  { background:#181818; border-color:#2e2e2e; color:rgba(255,255,255,0.9); }
+        body.bm-dark .toolbar .tool-btn.active { background:#222; border-color:#4e4e4e; color:#FAFAF8; }
+        body.bm-dark .tool-sep                 { background: #1c1c1c; }
+        body.bm-dark .tool-popover             { background: #0c0c0c; border-color: #2a2a2a; box-shadow: 2px 4px 18px rgba(0,0,0,0.7); }
+        body.bm-dark .tool-popover .tool-btn        { color: rgba(255,255,255,0.44); }
+        body.bm-dark .tool-popover .tool-btn:hover  { background:#181818; border-color:#2e2e2e; color:rgba(255,255,255,0.9); }
+        body.bm-dark .tool-popover .tool-btn.active { background:#222; border-color:#4e4e4e; color:#FAFAF8; }
+        body.bm-dark .tool-popover .w-btn            { color: rgba(255,255,255,0.44); }
+        body.bm-dark .tool-popover .w-btn:hover      { background:#181818; border-color:#2e2e2e; }
+        body.bm-dark .tool-popover .w-btn.active     { background:#222; border-color:#4e4e4e; color:#FAFAF8; }
+        body.bm-dark .pop-sep-line { background: #1c1c1c; }
+        body.bm-dark .pop-label    { color: #3a3a3a; }
+        body.bm-dark .shape-hint   { color: #1a1a1a; }
+        body.bm-dark #textOverlay input {
+            border-bottom-color: #F0EDE6;
+            color: #F0EDE6;
+            caret-color: #F0EDE6;
+        }
+
+        /* ── Mode transition: scan overlay ─────────────────────────────────── */
+        #modeOverlay {
+            position: fixed;
+            inset: 0;
+            pointer-events: none;
+            z-index: 5000;
+            opacity: 0;
+        }
+        @keyframes bmScanDown {
+            0%   { clip-path: inset(0 0 100% 0); opacity: 0.88; }
+            42%  { clip-path: inset(0 0 0%   0); opacity: 0.88; }
+            68%  { clip-path: inset(0 0 0%   0); opacity: 0.88; }
+            100% { clip-path: inset(0 0 0%   0); opacity: 0; }
+        }
+        #modeOverlay.bm-scanning {
+            animation: bmScanDown 1.1s cubic-bezier(0.22,1,0.36,1) forwards;
+        }
+
+        /* ── Canvas glitch on mode switch ───────────────────────────────────── */
+        @keyframes bmCanvasGlitch {
+            0%,100% { filter: none;                             transform: translateX(0); }
+            16%     { filter: saturate(0) contrast(3);          transform: translateX(-3px) scaleX(1.003); }
+            22%     { filter: invert(1);                        transform: translateX(3px); }
+            28%     { filter: brightness(1.6) contrast(1.4);    transform: translateX(-1px); }
+            36%     { filter: none;                             transform: translateX(0); }
+        }
+        .canvas-panel.bm-glitch {
+            animation: bmCanvasGlitch 0.40s ease-out forwards;
+        }
+
         /* ══════════════════════════════════
            MOBILE
         ══════════════════════════════════ */
@@ -817,6 +878,8 @@
 </main>
 
 <!-- ── Feedback Modal ─────────────────────────────────────────── -->
+<div id="modeOverlay"></div>
+
 <div id="feedbackOverlay" role="dialog" aria-modal="true" aria-labelledby="feedbackTitle">
     <div id="feedbackModal">
         <button class="fm-close" id="feedbackClose" aria-label="Close">✕</button>
@@ -950,7 +1013,7 @@
 <!-- Usage overlay -->
 <div id="usageOverlay">
     <div class="usage-box">
-        <h2>USAGE — BLACK MIRROR BOARD v0.9.0</h2>
+        <h2>USAGE — BLACK MIRROR BOARD v0.9.5</h2>
         <h3>TOOLS</h3>
         <pre><b>↑ Select</b>   tap/click · drag to move · Del to delete
          ↳ drag ○ handle above box to rotate
@@ -1001,6 +1064,12 @@ Set before drawing, or apply to selected object.</pre>
 <b>□</b>  docker build / terraform
 <b>→</b>  curl | jq / grep | sort
 <b>T</b>  stdin echo → terminal</pre>
+        <h3>TERMINAL COMMANDS</h3>
+        <pre><b>dark</b> / <b>dark mode</b>   embrace the void
+<b>light</b> / <b>light mode</b>  return to surface
+<b>youtube</b>            a surprise awaits
+<b>help</b>               show this reference
+<b>clear</b>              flush terminal</pre>
         <button class="usage-close" onclick="closeUsage()">CLOSE ✕</button>
     </div>
 </div>
@@ -1052,6 +1121,58 @@ const S = {
 const VIEW = { scale: 1, tx: 0, ty: 0 };
 
 const FILL_COLORS = { none: null, black: '#0c0c0c', grey: 'rgba(0,0,0,0.12)', white: '#FAFAF8' };
+
+// ── Dark Mode ──────────────────────────────────────────────────────────────
+let DARK_MODE = false;
+
+// Current stroke color (objects, text, pen strokes)
+function getStrokeColor()  { return DARK_MODE ? '#F0EDE6' : '#0c0c0c'; }
+// Preview overlay color while dragging shapes
+function getPreviewColor() { return DARK_MODE ? 'rgba(240,237,230,0.35)' : 'rgba(12,12,12,0.35)'; }
+
+// Map canonical light-mode fill values → dark-mode equivalents (and vice-versa for rendering)
+// Objects always store light-mode values; rendering converts on the fly.
+function resolveFill(fill) {
+    if (!fill || fill === 'none') return null;
+    if (!DARK_MODE) return fill;
+    if (fill === '#0c0c0c')          return '#F0EDE6';
+    if (fill === 'rgba(0,0,0,0.12)') return 'rgba(255,255,255,0.15)';
+    if (fill === '#FAFAF8')          return '#0c0c0c';
+    return fill; // unknown value (e.g. custom / image data) — pass through
+}
+
+function setDarkMode(dark) {
+    if (DARK_MODE === dark) return;
+    DARK_MODE = dark;
+    triggerModeTransition(dark);
+}
+
+function triggerModeTransition(dark) {
+    const overlay = document.getElementById('modeOverlay');
+    const panel   = document.getElementById('cp');
+
+    // Phase 1 — glitch-flash the canvas panel
+    panel.classList.remove('bm-glitch');
+    void panel.offsetWidth;          // force reflow so re-adding triggers animation
+    panel.classList.add('bm-glitch');
+    setTimeout(() => panel.classList.remove('bm-glitch'), 440);
+
+    // Phase 2 — switch mode & redraw, then run the scan overlay
+    setTimeout(() => {
+        document.body.classList.toggle('bm-dark', dark);
+        redrawAll();
+
+        overlay.style.background = dark
+            ? 'rgba(0,0,0,0.85)'
+            : 'rgba(252,250,246,0.9)';
+        overlay.classList.remove('bm-scanning');
+        void overlay.offsetWidth;
+        overlay.classList.add('bm-scanning');
+        overlay.addEventListener('animationend', () => {
+            overlay.classList.remove('bm-scanning');
+        }, { once: true });
+    }, 170);
+}
 
 let CW = 0, CH = 0;
 let detectTimer = null;
@@ -1573,7 +1694,7 @@ function onMove(cx, cy) {
         // ── Incremental draw (normal) ────────────────────────────────────
         ctx.save();
         ctx.setTransform(VIEW.scale*dpr, 0, 0, VIEW.scale*dpr, VIEW.tx*dpr, VIEW.ty*dpr);
-        ctx.strokeStyle = '#0c0c0c'; ctx.lineWidth = S.lineWidth;
+        ctx.strokeStyle = getStrokeColor(); ctx.lineWidth = S.lineWidth;
         ctx.lineCap = 'round'; ctx.lineJoin = 'round';
         const mx = (prev.x+cur.x)/2, my = (prev.y+cur.y)/2;
         ctx.beginPath(); ctx.moveTo(prev.x, prev.y); ctx.quadraticCurveTo(prev.x, prev.y, mx, my); ctx.stroke();
@@ -1700,7 +1821,7 @@ function renderObject(obj) {
 }
 
 function baseStyle() {
-    ctx.strokeStyle = '#0c0c0c'; ctx.lineWidth = 2.2;
+    ctx.strokeStyle = getStrokeColor(); ctx.lineWidth = 2.2;
     ctx.lineCap = 'round'; ctx.lineJoin = 'round';
 }
 
@@ -1708,7 +1829,7 @@ function renderCircle(obj) {
     const {cx, cy, rx, ry} = obj.data;
     ctx.save(); baseStyle();
     ctx.beginPath(); ctx.ellipse(cx, cy, Math.max(rx,1), Math.max(ry,1), 0, 0, 2*Math.PI);
-    if (obj.data.fill) { ctx.fillStyle = obj.data.fill; ctx.fill(); }
+    const _cf = resolveFill(obj.data.fill); if (_cf) { ctx.fillStyle = _cf; ctx.fill(); }
     if (!obj.data.strokeOff) ctx.stroke();
     if (obj.selected) { selBox(cx-rx, cy-ry, 2*rx, 2*ry); drawAnchors(obj); }
     ctx.restore();
@@ -1725,7 +1846,7 @@ function renderTriangle(obj) {
         ctx.moveTo(x+w/2,y); ctx.lineTo(x+w,y+h); ctx.lineTo(x,y+h);
     }
     ctx.closePath();
-    if (obj.data.fill) { ctx.fillStyle = obj.data.fill; ctx.fill(); }
+    const _tf = resolveFill(obj.data.fill); if (_tf) { ctx.fillStyle = _tf; ctx.fill(); }
     if (!obj.data.strokeOff) ctx.stroke();
     if (obj.selected) {
         const b = getObjBounds(obj);
@@ -1738,7 +1859,7 @@ function renderTriangle(obj) {
 function renderSquare(obj) {
     const {x, y, w, h} = obj.data;
     ctx.save(); baseStyle();
-    if (obj.data.fill) { ctx.fillStyle = obj.data.fill; ctx.fillRect(x, y, w, h); }
+    const _sf = resolveFill(obj.data.fill); if (_sf) { ctx.fillStyle = _sf; ctx.fillRect(x, y, w, h); }
     if (!obj.data.strokeOff) ctx.strokeRect(x, y, w, h);
     if (obj.selected) { selBox(x, y, w, h); drawAnchors(obj); }
     ctx.restore();
@@ -1765,7 +1886,7 @@ function renderText(obj) {
     const fs = fontSize || 16;
     ctx.save();
     ctx.font = `${fs}px "Courier New", monospace`;
-    ctx.fillStyle = '#0c0c0c';
+    ctx.fillStyle = getStrokeColor();
     ctx.fillText(text, x, y);
     if (obj.selected) {
         const tw = ctx.measureText(text).width;
@@ -1779,7 +1900,7 @@ function renderStroke(obj) {
     const { pts, lw, closed, fill, strokeOff } = obj.data;
     if (pts.length < 2) return;
     ctx.save();
-    ctx.strokeStyle = '#0c0c0c'; ctx.lineWidth = lw; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    ctx.strokeStyle = getStrokeColor(); ctx.lineWidth = lw; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
     ctx.beginPath(); ctx.moveTo(pts[0].x, pts[0].y);
     for (let i = 1; i < pts.length; i++) {
         const pp = pts[i-1], p = pts[i];
@@ -1788,7 +1909,7 @@ function renderStroke(obj) {
     }
     if (closed) {
         ctx.closePath();
-        if (fill && fill !== 'none') { ctx.fillStyle = fill; ctx.fill(); }
+        const _strf = resolveFill(fill); if (_strf) { ctx.fillStyle = _strf; ctx.fill(); }
     }
     if (!strokeOff) ctx.stroke();
     if (obj.selected) { const bb = strokeBBox(pts); selBox(bb.x, bb.y, bb.w, bb.h); drawAnchors(obj); }
@@ -1844,7 +1965,7 @@ function renderPenInProgress() {
     if (S.tool !== 'pen' || S.penPts.length < 2) return;
     const pts = S.penPts;
     ctx.save();
-    ctx.strokeStyle = '#0c0c0c'; ctx.lineWidth = S.lineWidth;
+    ctx.strokeStyle = getStrokeColor(); ctx.lineWidth = S.lineWidth;
     ctx.lineCap = 'round'; ctx.lineJoin = 'round';
     ctx.beginPath(); ctx.moveTo(pts[0].x, pts[0].y);
     for (let i = 1; i < pts.length; i++) {
@@ -1871,7 +1992,7 @@ function renderPreview() {
     const {x:x1, y:y1} = S.startPt, {x:x2, y:y2} = S.curPt;
     const ang = Math.atan2(y2-y1, x2-x1), hl = 13;
     ctx.save();
-    ctx.strokeStyle = 'rgba(12,12,12,0.35)'; ctx.lineWidth = 2; ctx.setLineDash([5,4]);
+    ctx.strokeStyle = getPreviewColor(); ctx.lineWidth = 2; ctx.setLineDash([5,4]);
     switch (S.tool) {
         case 'circle': {
             ctx.beginPath();
@@ -2151,95 +2272,184 @@ function ensureTrianglePts(obj) {
     }
 }
 
-// Returns 8 bounding-box anchor handles for any shape (uniform resize UX)
+// Returns type-specific anchor handles — vertices for paths/shapes, bbox for resize-only types.
+// Each anchor: { id, x, y, kind: 'vertex'|'bbox', ptIdx? }
+// 'vertex' anchors are rendered as circles and move individual points (Illustrator feel).
+// 'bbox'   anchors are rendered as squares and scale the whole shape.
 function getAnchors(obj) {
-    const b = getObjBounds(obj);
-    if (!b) return [];
-    const {x, y, w, h} = b;
-    return [
-        { id:'tl', x:x,     y:y     },
-        { id:'tm', x:x+w/2, y:y     },
-        { id:'tr', x:x+w,   y:y     },
-        { id:'rm', x:x+w,   y:y+h/2 },
-        { id:'br', x:x+w,   y:y+h   },
-        { id:'bm', x:x+w/2, y:y+h   },
-        { id:'bl', x:x,     y:y+h   },
-        { id:'lm', x:x,     y:y+h/2 },
-    ];
+    switch (obj.type) {
+
+        // ── Circle: 4 cardinal handles on the ellipse outline ──────────────
+        case 'circle': {
+            const { cx, cy, rx, ry } = obj.data;
+            return [
+                { id:'top',   x:cx,    y:cy-ry, kind:'vertex' },
+                { id:'right', x:cx+rx, y:cy,    kind:'vertex' },
+                { id:'bot',   x:cx,    y:cy+ry, kind:'vertex' },
+                { id:'left',  x:cx-rx, y:cy,    kind:'vertex' },
+            ];
+        }
+
+        // ── Triangle: 3 actual vertices ─────────────────────────────────────
+        case 'triangle': {
+            ensureTrianglePts(obj);
+            return obj.data.pts.map((p, i) => ({ id:`v${i}`, x:p.x, y:p.y, kind:'vertex' }));
+        }
+
+        // ── Square / Image: 8-handle bbox resize ────────────────────────────
+        case 'square':
+        case 'image': {
+            const { x, y, w, h } = obj.data;
+            return [
+                { id:'tl', x:x,     y:y,     kind:'bbox' },
+                { id:'tm', x:x+w/2, y:y,     kind:'bbox' },
+                { id:'tr', x:x+w,   y:y,     kind:'bbox' },
+                { id:'rm', x:x+w,   y:y+h/2, kind:'bbox' },
+                { id:'br', x:x+w,   y:y+h,   kind:'bbox' },
+                { id:'bm', x:x+w/2, y:y+h,   kind:'bbox' },
+                { id:'bl', x:x,     y:y+h,   kind:'bbox' },
+                { id:'lm', x:x,     y:y+h/2, kind:'bbox' },
+            ];
+        }
+
+        // ── Arrow: start + end endpoints ────────────────────────────────────
+        case 'arrow': {
+            const { x1, y1, x2, y2 } = obj.data;
+            return [
+                { id:'start', x:x1, y:y1, kind:'vertex' },
+                { id:'end',   x:x2, y:y2, kind:'vertex' },
+            ];
+        }
+
+        // ── Text: 6-handle bbox resize (no vertex concept) ──────────────────
+        case 'text': {
+            const b = getObjBounds(obj);
+            if (!b) return [];
+            const { x, y, w, h } = b;
+            return [
+                { id:'tl', x:x,     y:y,    kind:'bbox' },
+                { id:'tm', x:x+w/2, y:y,    kind:'bbox' },
+                { id:'tr', x:x+w,   y:y,    kind:'bbox' },
+                { id:'br', x:x+w,   y:y+h,  kind:'bbox' },
+                { id:'bm', x:x+w/2, y:y+h,  kind:'bbox' },
+                { id:'bl', x:x,     y:y+h,  kind:'bbox' },
+            ];
+        }
+
+        // ── Stroke (pen): evenly-sampled path points ─────────────────────────
+        case 'stroke': {
+            const pts = obj.data.pts;
+            if (!pts || pts.length < 2) return [];
+            const MAX  = 12;
+            const step = Math.max(1, Math.floor((pts.length - 1) / (MAX - 1)));
+            const result = [];
+            for (let i = 0; i < pts.length - 1; i += step) {
+                result.push({ id:`p${i}`, x:pts[i].x, y:pts[i].y, kind:'vertex', ptIdx:i });
+            }
+            // always include the last point
+            const last = pts.length - 1;
+            result.push({ id:`p${last}`, x:pts[last].x, y:pts[last].y, kind:'vertex', ptIdx:last });
+            return result;
+        }
+
+        default: return [];
+    }
 }
 
-// Apply anchor drag: scale shape geometry using origBounds/origData stored at drag start
+// Apply anchor drag — direct vertex manipulation for path types, bbox-scale for resize types.
 function applyAnchor(obj, anchorId, nx, ny) {
-    const { origBounds: ob, origData: od } = S.anchorDrag;
-    if (!ob || !od) return;
-    const { x: ox, y: oy, w: ow, h: oh } = ob;
-    const MIN = 8;
-    const fx = ox + ow, fy = oy + oh; // right/bottom edge (used as fixed corners)
-
-    // Compute new bounding box
-    let nBx, nBy, nBw, nBh;
-    switch (anchorId) {
-        case 'tl': nBw=Math.max(MIN,fx-nx); nBh=Math.max(MIN,fy-ny); nBx=fx-nBw; nBy=fy-nBh; break;
-        case 'tm': nBx=ox; nBw=ow;          nBh=Math.max(MIN,fy-ny); nBy=fy-nBh; break;
-        case 'tr': nBx=ox; nBw=Math.max(MIN,nx-ox); nBh=Math.max(MIN,fy-ny); nBy=fy-nBh; break;
-        case 'rm': nBx=ox; nBy=oy; nBw=Math.max(MIN,nx-ox); nBh=oh; break;
-        case 'br': nBx=ox; nBy=oy; nBw=Math.max(MIN,nx-ox); nBh=Math.max(MIN,ny-oy); break;
-        case 'bm': nBx=ox; nBy=oy; nBw=ow; nBh=Math.max(MIN,ny-oy); break;
-        case 'bl': nBw=Math.max(MIN,fx-nx); nBx=fx-nBw; nBy=oy; nBh=Math.max(MIN,ny-oy); break;
-        case 'lm': nBw=Math.max(MIN,fx-nx); nBx=fx-nBw; nBy=oy; nBh=oh; break;
-        default: return;
-    }
-
-    // Scale factors (guard against zero-size original bounds)
-    const sx = ow > 0.5 ? nBw / ow : 1;
-    const sy = oh > 0.5 ? nBh / oh : 1;
-    const sX = px => nBx + (px - ox) * sx;
-    const sY = py => nBy + (py - oy) * sy;
+    const { origBounds: ob, origData: od, ptIdx } = S.anchorDrag;
+    if (!od) return;
 
     switch (obj.type) {
-        case 'circle':
-            obj.data.cx = sX(od.cx);
-            obj.data.cy = sY(od.cy);
-            obj.data.rx = Math.max(2, od.rx * sx);
-            obj.data.ry = Math.max(2, od.ry * sy);
+
+        // ── Circle: drag cardinal point → resize one radius independently ───
+        case 'circle': {
+            if (anchorId === 'top'  ) obj.data.ry = Math.max(2, od.cy - ny);
+            if (anchorId === 'bot'  ) obj.data.ry = Math.max(2, ny - od.cy);
+            if (anchorId === 'right') obj.data.rx = Math.max(2, nx - od.cx);
+            if (anchorId === 'left' ) obj.data.rx = Math.max(2, od.cx - nx);
             break;
-        case 'triangle':
-            if (od.pts) {
-                obj.data.pts = od.pts.map(p => ({ x: sX(p.x), y: sY(p.y) }));
-                const xs = obj.data.pts.map(p=>p.x), ys = obj.data.pts.map(p=>p.y);
+        }
+
+        // ── Triangle: drag one vertex freely ────────────────────────────────
+        case 'triangle': {
+            const idx = parseInt(anchorId.slice(1)); // 'v0' → 0
+            if (!isNaN(idx) && od.pts) {
+                obj.data.pts = od.pts.map((p, i) => i === idx ? { x: nx, y: ny } : { ...p });
+                const xs = obj.data.pts.map(p => p.x), ys = obj.data.pts.map(p => p.y);
                 obj.data.x = Math.min(...xs); obj.data.y = Math.min(...ys);
                 obj.data.w = Math.max(...xs) - obj.data.x;
                 obj.data.h = Math.max(...ys) - obj.data.y;
-            } else {
-                obj.data.x = nBx; obj.data.y = nBy; obj.data.w = nBw; obj.data.h = nBh;
             }
             break;
+        }
+
+        // ── Square / Image: 8-handle proportional bbox resize ───────────────
         case 'square':
-        case 'image':
+        case 'image': {
+            if (!ob) break;
+            const { x: ox, y: oy, w: ow, h: oh } = ob;
+            const MIN = 8, fx = ox + ow, fy = oy + oh;
+            let nBx, nBy, nBw, nBh;
+            switch (anchorId) {
+                case 'tl': nBw=Math.max(MIN,fx-nx); nBh=Math.max(MIN,fy-ny); nBx=fx-nBw; nBy=fy-nBh; break;
+                case 'tm': nBx=ox; nBw=ow;          nBh=Math.max(MIN,fy-ny); nBy=fy-nBh; break;
+                case 'tr': nBx=ox; nBw=Math.max(MIN,nx-ox); nBh=Math.max(MIN,fy-ny); nBy=fy-nBh; break;
+                case 'rm': nBx=ox; nBy=oy; nBw=Math.max(MIN,nx-ox); nBh=oh; break;
+                case 'br': nBx=ox; nBy=oy; nBw=Math.max(MIN,nx-ox); nBh=Math.max(MIN,ny-oy); break;
+                case 'bm': nBx=ox; nBy=oy; nBw=ow; nBh=Math.max(MIN,ny-oy); break;
+                case 'bl': nBw=Math.max(MIN,fx-nx); nBx=fx-nBw; nBy=oy; nBh=Math.max(MIN,ny-oy); break;
+                case 'lm': nBw=Math.max(MIN,fx-nx); nBx=fx-nBw; nBy=oy; nBh=oh; break;
+                default: return;
+            }
             obj.data.x = nBx; obj.data.y = nBy; obj.data.w = nBw; obj.data.h = nBh;
             break;
-        case 'arrow':
-            obj.data.x1 = sX(od.x1); obj.data.y1 = sY(od.y1);
-            obj.data.x2 = sX(od.x2); obj.data.y2 = sY(od.y2);
+        }
+
+        // ── Arrow: drag either endpoint freely ──────────────────────────────
+        case 'arrow': {
+            if (anchorId === 'start') { obj.data.x1 = nx; obj.data.y1 = ny; }
+            if (anchorId === 'end'  ) { obj.data.x2 = nx; obj.data.y2 = ny; }
             break;
+        }
+
+        // ── Text: bbox resize → scale font size ─────────────────────────────
         case 'text': {
-            // Text: derive fontSize from new height, reposition to new top-left
+            if (!ob) break;
+            const { x: ox, y: oy, w: ow, h: oh } = ob;
+            const MIN = 8, fx = ox + ow, fy = oy + oh;
+            let nBx, nBy, nBw, nBh;
+            switch (anchorId) {
+                case 'tl': nBw=Math.max(MIN,fx-nx); nBh=Math.max(MIN,fy-ny); nBx=fx-nBw; nBy=fy-nBh; break;
+                case 'tm': nBx=ox; nBw=ow;          nBh=Math.max(MIN,fy-ny); nBy=fy-nBh; break;
+                case 'tr': nBx=ox; nBw=Math.max(MIN,nx-ox); nBh=Math.max(MIN,fy-ny); nBy=fy-nBh; break;
+                case 'br': nBx=ox; nBy=oy; nBw=Math.max(MIN,nx-ox); nBh=Math.max(MIN,ny-oy); break;
+                case 'bm': nBx=ox; nBy=oy; nBw=ow; nBh=Math.max(MIN,ny-oy); break;
+                case 'bl': nBw=Math.max(MIN,fx-nx); nBx=fx-nBw; nBy=oy; nBh=Math.max(MIN,ny-oy); break;
+                default: return;
+            }
             const fsH = nBh / 1.3;
-            const nChars = od.text.length || 1;
-            const fsW = nBw / (nChars * 0.6);
-            let newFs;
-            if (anchorId==='tm'||anchorId==='bm') newFs = fsH;
-            else if (anchorId==='lm'||anchorId==='rm') newFs = fsW;
-            else newFs = Math.min(fsH, fsW);
+            const fsW = nBw / ((od.text.length || 1) * 0.6);
+            let newFs = (anchorId==='tm'||anchorId==='bm') ? fsH
+                      : (anchorId==='bl'||anchorId==='br') ? Math.min(fsH, fsW)
+                      : fsW;
             newFs = Math.max(8, Math.min(200, Math.round(newFs)));
             obj.data.fontSize = newFs;
             obj.data.x = nBx;
             obj.data.y = nBy + newFs;
             break;
         }
-        case 'stroke':
-            obj.data.pts = od.pts.map(p => ({ x: sX(p.x), y: sY(p.y) }));
+
+        // ── Stroke: move one sampled path point ─────────────────────────────
+        // Dragging a handle moves only that point; surrounding curve adjusts smoothly
+        // because the path uses quadratic bezier smoothing over all pts.
+        case 'stroke': {
+            if (ptIdx !== undefined && obj.data.pts[ptIdx] !== undefined) {
+                obj.data.pts[ptIdx] = { x: nx, y: ny };
+            }
             break;
+        }
     }
 }
 
@@ -2689,12 +2899,39 @@ document.getElementById('ti').addEventListener('keydown', e => {
         setTimeout(triggerYouTube, 600);
     } else if (low==='clear'||low==='flush') {
         flushTerm();
+    } else if (low==='dark'||low==='dark mode') {
+        if (DARK_MODE) {
+            printRaw('[SYSTEM] already in dark mode — void already embraced.', 't-dim');
+        } else {
+            enqueue('[SYSTEM] Switching to DARK MODE...', [
+                '[SYSTEM] inverting color matrix...',
+                '[SYSTEM] canvas: #000000  stroke: #F0EDE6',
+                '[SYSTEM] grid: deep slate  mode: void',
+                '[SYSTEM] Environment initialized.',
+            ], 't-dim');
+            setTimeout(() => setDarkMode(true), 220);
+        }
+    } else if (low==='light'||low==='light mode') {
+        if (!DARK_MODE) {
+            printRaw('[SYSTEM] already in light mode — surface is clean.', 't-dim');
+        } else {
+            enqueue('[SYSTEM] Switching to LIGHT MODE...', [
+                '[SYSTEM] restoring color matrix...',
+                '[SYSTEM] canvas: #FAFAF8  stroke: #0c0c0c',
+                '[SYSTEM] grid: warm grey  mode: surface',
+                '[SYSTEM] Environment initialized.',
+            ], 't-dim');
+            setTimeout(() => setDarkMode(false), 220);
+        }
     } else if (low==='help') {
         enqueue('help', ['draw shapes on canvas:',
             '  ○  git init / npm create', '  ◎  docker run / kubectl',
             '  △  git branch / build',    '  □  docker build / terraform',
             '  →  curl | jq / grep | sort', '  T  text → stdin echo',
-            '', 'type "youtube" for a surprise.']);
+            '', 'hidden commands:',
+            '  dark / dark mode   — embrace the void',
+            '  light / light mode — return to surface',
+            '  youtube            — a surprise awaits']);
     } else {
         enqueue(val, [`${val.split(' ')[0]}: command not found`]);
     }
@@ -3057,6 +3294,8 @@ document.addEventListener('keydown', e => {
     if (k === '3') { setLineWidth(4);   return; }
     // Export shortcut
     if (k === 'x') { exportPng(); return; }
+    // Image upload shortcut
+    if (k === 'i') { document.getElementById('uploadImgBtn').click(); return; }
     if (map[k]) setTool(map[k]);
     if (e.key==='Delete' || e.key==='Backspace') {
         if (S.multiSelected.length > 0) {
@@ -3246,7 +3485,7 @@ function clearCanvas() {
 // ══════════════════════════════════════════════════
 
 function boot() {
-    enqueue('blackmirror --init --version 0.8.1', [
+    enqueue('blackmirror --init --version 0.9.5', [
         '99letters studio — all rights reserved',
         '',
         'loading kernel...',
@@ -3257,15 +3496,17 @@ function boot() {
         '  rotation engine    ✓ ready',
         '  anchor system      ✓ ready',
         '  fill engine        ✓ ready',
+        '  pen auto-close     ✓ snap ring active',
         '  shape detector     ✓ listening',
+        '  dark mode engine   ✓ standby',
         '  zoom engine        ✓ ready',
         '  audio engine       ✓ standby',
         '  syntax highlighter ✓ loaded',
-        '  export / import    ✓ JSON ready',
+        '  export / import    ✓ JSON + PNG ready',
         '  terminal daemon    ✓ running',
         '',
         'Draw. Pan. Save. The mirror responds.',
-        'Type "help" or press USAGE for guidance.',
+        'Type "dark mode" to embrace the void.',
     ]);
 }
 
@@ -3376,14 +3617,15 @@ function renderObjectToCtx(c2, obj) {
     const lw = d.lineWidth || 2.2;
 
     function base() {
-        c2.strokeStyle = '#0c0c0c';
+        c2.strokeStyle = getStrokeColor();
         c2.lineWidth   = lw;
         c2.lineCap     = 'round';
         c2.lineJoin    = 'round';
-        c2.fillStyle   = d.fill || 'none';
+        c2.fillStyle   = resolveFill(d.fill) || 'none';
     }
     function applyFill() {
-        if (d.fill && d.fill !== 'none') c2.fill();
+        const rf = resolveFill(d.fill);
+        if (rf) { c2.fillStyle = rf; c2.fill(); }
         if (!d.strokeOff) c2.stroke();
     }
 
@@ -3413,25 +3655,25 @@ function renderObjectToCtx(c2, obj) {
             const hw = Math.max(6, lw * 3.5);
             const hlen = hw * 1.5;
             const bx = d.x2 - ux * hlen, by = d.y2 - uy * hlen;
-            c2.strokeStyle = '#0c0c0c'; c2.lineWidth = lw;
+            c2.strokeStyle = getStrokeColor(); c2.lineWidth = lw;
             c2.lineCap = 'round'; c2.lineJoin = 'round';
             c2.beginPath(); c2.moveTo(d.x1, d.y1); c2.lineTo(bx, by); c2.stroke();
             c2.beginPath();
             c2.moveTo(d.x2, d.y2);
             c2.lineTo(bx - uy*hw, by + ux*hw);
             c2.lineTo(bx + uy*hw, by - ux*hw);
-            c2.closePath(); c2.fillStyle = '#0c0c0c'; c2.fill(); break;
+            c2.closePath(); c2.fillStyle = getStrokeColor(); c2.fill(); break;
         }
         case 'text': {
             const fs = d.fontSize || 16;
             c2.font         = `${fs}px 'Courier New', monospace`;
-            c2.fillStyle    = '#0c0c0c';
+            c2.fillStyle    = getStrokeColor();
             c2.textBaseline = 'top';
             c2.fillText(d.text, d.x, d.y); break;
         }
         case 'stroke': {
             if (!d.pts || d.pts.length < 2) break;
-            c2.strokeStyle = '#0c0c0c';
+            c2.strokeStyle = getStrokeColor();
             c2.lineWidth   = d.lw || lw;
             c2.lineCap     = 'round'; c2.lineJoin = 'round';
             c2.beginPath(); c2.moveTo(d.pts[0].x, d.pts[0].y);
@@ -3441,9 +3683,9 @@ function renderObjectToCtx(c2, obj) {
             }
             if (d.closed) {
                 c2.closePath();
-                if (d.fill && d.fill !== 'none') { c2.fillStyle = d.fill; c2.fill(); }
+                const _expf = resolveFill(d.fill); if (_expf) { c2.fillStyle = _expf; c2.fill(); }
             }
-            c2.stroke(); break;
+            if (!d.strokeOff) c2.stroke(); break;
         }
         case 'image': {
             const img = getCachedImg(d.src);
