@@ -1,40 +1,70 @@
+<div align="center">
+
 ```
-██████╗ ███╗   ███╗
-██╔══██╗████╗ ████║   BLACK MIRROR BOARD
-██████╔╝██╔████╔██║   ─────────────────────────────────────────
-██╔══██╗██║╚██╔╝██║   draw to build
-██████╔╝██║ ╚═╝ ██║   v0.9.6 · 99letters studio · 2026
-╚═════╝ ╚═╝     ╚═╝
+ ██████╗ ███╗   ███╗
+ ██╔══██╗████╗ ████║     BLACK MIRROR BOARD
+ ██████╔╝██╔████╔██║     ─────────────────────────────
+ ██╔══██╗██║╚██╔╝██║     draw to build
+ ██████╔╝██║ ╚═╝ ██║     v1.0 · 99letters studio · 2026
+ ╚═════╝ ╚═╝     ╚═╝     release: 2026-04-16
 ```
 
-![stack](https://img.shields.io/badge/stack-vanilla_JS-000000?style=flat-square)
-![deps](https://img.shields.io/badge/deps-zero-000000?style=flat-square)
-![canvas](https://img.shields.io/badge/canvas-HTML5-000000?style=flat-square)
-![license](https://img.shields.io/badge/license-MIT-000000?style=flat-square)
-![platform](https://img.shields.io/badge/platform-web%20%7C%20mobile-000000?style=flat-square)
+![stack](https://img.shields.io/badge/stack-vanilla_JS-000?style=flat-square)
+![deps](https://img.shields.io/badge/deps-zero-000?style=flat-square)
+![canvas](https://img.shields.io/badge/canvas-HTML5-000?style=flat-square)
+![themes](https://img.shields.io/badge/themes-light_%7C_dark_%7C_gray-000?style=flat-square)
+![license](https://img.shields.io/badge/license-MIT-000?style=flat-square)
+
+</div>
 
 ---
 
-**For designers who dream in code.**  
-A visual-to-terminal synthesis engine.  
-Draw a shape. Watch the terminal respond. Ship nothing — feel everything.
+A terminal-driven infinite canvas. One HTML file. No dependencies. No build.
+Every draw action speaks back through a live shell. **v1.0 ships 2026-04-16.**
+
+```
+open projects/black_mirror/app.html
+```
+
+That's the install.
 
 ---
 
-## philosophy
+## What's new in v1.0
 
-**Intuition over syntax.**  
-You draw. The machine translates. No keyboard required to feel like an engineer.
+```
+GRAY MODE          studio ground #DCDBD5 · cobalt ink #1600A2
+                   `gray` in terminal · all fills re-tint on switch
 
-**Subtractive design.**  
-One file. Zero dependencies. Zero build steps. If it doesn't need to exist, it doesn't.
+HIT-TEST 2.0       segment-distance picking + 8px invisible pad
+                   thin strokes grab like fat ones · hover glow
+                   directional cursors (nwse/nesw/ns/ew)
 
-**George Hotz energy.**  
-The terminal moves at the speed of thought. Your hand replaces his keyboard.
+SHIFT RESIZE       corner drag + Shift = aspect-lock
+                   Alt = center-pinned symmetric scale
+                   Shift+Alt = both · 0.5×/1×/1.5×/2× snap
+                   images lock by DEFAULT — Shift to free them
+
+THEMED SELECTION   selection box + marquee recolor per mode
+                   cobalt on light · white on dark · white on pebble
+
+ALPHA PNG          selection-aware · tight bbox · 3× DPR cap
+                   transparent background for compositing
+```
 
 ---
 
-## shape → command
+## Philosophy
+
+**Intuition over syntax.** Draw a shape. The terminal answers.
+
+**Subtractive.** One file. Zero deps. Zero build. If it doesn't need to exist, it doesn't.
+
+**Local-first.** No cloud. No auth. Ctrl+S is JSON, export is PNG. Your file, your disk.
+
+---
+
+## Shape → command
 
 ```
 ○  circle      git init / npm create / python -m http.server
@@ -43,124 +73,140 @@ The terminal moves at the speed of thought. Your hand replaces his keyboard.
 □  square      docker build / terraform plan
 →  arrow       curl | jq / grep | sort | uniq
 T  text        stdin echo / raw injection
-✎  pen         free path — close loop to fill like a shape
-🖼  image       place any photo or asset directly on the board
+✎  pen         freehand path — close loop to fill like a shape
+🖼  image       drop any photo or asset onto the board
 ```
 
 ---
 
-## features
+## Features
 
 ```
-PATH EDITING     select any object → drag ○ vertex anchors to reshape
-                 drag □ bbox anchors (8-point) to scale freely
-                 rotation ring above the bbox — Illustrator feel
-                 every shape (circle / triangle / square / arrow / pen)
-                 supports both per-vertex edit AND bbox scale at once
+CANVAS           infinite pan · 0.15× → 8× zoom · Retina-ready
+                 pointer events unified across mouse / touch / pen
+                 DPR-scaled ctx.setTransform · 60fps redraws
 
-PEN → PATH       freehand strokes are auto-simplified on lift via
-                 Douglas–Peucker → anchor count stays editable (≤12)
-                 dense pts kept internally for curve smoothness
-                 tap a stroke → ○ vertex dots + □ bbox handles appear
-                 tap a vertex dot → drag that point only
-                 tap the line body → drag the whole stroke
+SELECT · MOVE    click body or within 8px of line · drag to move
+                 hover glow · cursor: move / nwse-resize / ns-resize
+                 marquee: dashed box · intersection-aware
 
-PEN CLOSE        draw a pen path back near its start point →
-                 blue snap ring appears → release to auto-close
-                 closed paths support fill color like any shape
+EDIT             8-handle bbox: tl/tm/tr/rm/br/bm/bl/lm
+                 per-vertex anchors on pen / triangle / path
+                 rotation ring above the bbox (Illustrator feel)
+                 Shift: lock aspect · Alt: center-pin · Shift+Alt: both
+                 live snap at 0.5× / 1× / 1.5× / 2× scale milestones
+
+PEN → PATH       freehand → RDP simplify on lift (≤ ~12 anchors)
+                 dense pts kept internally for smooth curves
+                 auto-close: draw back to origin → blue snap ring
 
 FILL + LINE      fill: none / black / grey / white
-                 line: on / off (red-slash icon removes outline)
-                 apply before drawing or change on selected object
+                 line: on / off (no outline, closed shapes only)
+                 all fills re-tint to match active theme
 
-BLACK MIRROR     every draw action fires real terminal output
-SYNC             typewriter queue · syntax highlighting · ambient daemon
+THEMES           light : surface #FAFAF8 · ink #0c0c0c
+                 dark  : void    #000000 · ink #F0EDE6
+                 gray  : pebble  #DCDBD5 · ink #1600A2
+                 swap via terminal: `light` | `dark` | `gray`
+                 glitch-flash + scan overlay between modes
 
-IMAGE UPLOAD     toolbar 🖼 button → pick any image file
-                 auto-scaled to fit view · move · resize · rotate
-                 exported in PNG · saved in JSON
+IMAGE UPLOAD     toolbar 🖼 · any image file · base64 inline
+                 aspect-locked on corners by default (Shift frees)
+                 move · resize · rotate · export
 
-TRANSPARENT      select objects → press X
-PNG EXPORT       tight-cropped · transparent bg · Retina-ready
+TRANSPARENT PNG  select, press X · tight-crop · 3× DPR · alpha bg
 
-UNDO / REDO      Ctrl+Z / Ctrl+Y · 60-state snapshot history
+PERSISTENCE      SAVE ↓ / OPEN ↑ · full JSON snapshot including
+                 canvas objects + terminal log + view transform
 
-PAN + ZOOM       Space+drag · pinch · scroll · double-tap resets
+UNDO · REDO      Ctrl+Z / Ctrl+Y / Ctrl+Shift+Z · 60-state history
 
-PANEL RESIZE     drag the divider bar between canvas and terminal
-                 desktop: horizontal  mobile: vertical
-                 mobile input row is pinned to the viewport bottom —
-                 resizing the split never hides the prompt
+PAN · ZOOM       Space+drag · pinch · scroll-wheel · double-tap reset
 
-MOBILE ANCHORS   vertex / bbox handles scale up on touch (≈1.7×)
-                 active anchor shows a halo so the finger doesn't
-                 occlude it · tighter vertex hit-radius leaves room
-                 on the line body for whole-object drag
-                 stroke body hit-zone grows to ≈28 px on touch
-
-PERSISTENCE      SAVE ↓ / OPEN ↑ · full JSON snapshot
-                 images stored as base64 · no cloud · no auth
-
-DARK MODE        type "dark mode" in terminal → canvas inverts to void
-                 type "light mode" → surface restored
-                 scan animation + glitch transition
-                 export PNG respects current mode — white lines on transparent
-
-FEEDBACK         tap the logo → modal → mail to studio
+TERMINAL         typewriter queue · syntax highlight · ambient daemon
+                 commands: dark / light / gray / help / clear / youtube
 ```
 
 ---
 
-## usage
+## Keyboard
+
+```
+S          select          1 2 3      line width
+P          pen             Space      pan (hold)
+N          path            Shift      lock aspect (while resizing)
+E          eraser          Alt        center-pin (while resizing)
+C          circle          X          export transparent PNG
+G          triangle        I          upload image
+Q          square          Del        delete selected
+A          arrow           Ctrl+Z     undo
+T          text            Ctrl+Y     redo
+                           Esc        deselect · cancel
+```
+
+---
+
+## Terminal commands
+
+```
+> help            command reference
+> clear           flush output
+> light           surface mode
+> dark            void mode
+> gray            studio mode (cobalt on pebble)
+> youtube         (try it)
+```
+
+---
+
+## Quick start
 
 ```sh
-# no install. open directly.
+# no install. open directly:
 open projects/black_mirror/app.html
 
-# or serve locally
+# or serve locally (to enable file:// APIs on strict browsers):
 python -m http.server 8000
-# → localhost:8000/projects/black_mirror/app.html
-```
-
-```
-keyboard
-────────────────────────────────────
-S          select tool
-P          pen  (tap for width)
-C          circle
-G          triangle
-Q          square
-A          arrow
-T          text
-I          upload image
-X          export transparent PNG
-1 2 3      line width
-Space      pan mode (hold)
-Del        delete selected
-Ctrl+Z     undo
-Ctrl+Y     redo
-Esc        deselect / cancel
+# → http://localhost:8000/projects/black_mirror/app.html
 ```
 
 ---
 
-## terminal
+## Stack
 
-```sh
-> help            show command reference
-> clear           flush terminal output
-> dark mode       embrace the void
-> light mode      return to surface
-> youtube         —
-> yt              ——
 ```
-
-> Type `dark mode` to embrace the void.  
-> Type `youtube`. Something else happens.
+render       HTML5 Canvas · ctx.setTransform · devicePixelRatio
+input        Pointer Events · setPointerCapture · multi-touch pinch
+geometry     RDP simplification · bezier smoothing · segment-distance
+             ray-cast point-in-polygon for closed-fill hit-test
+theming      CSS custom properties · body.bm-{light|dark|gray}
+             resolveFill() — channel-invert + cobalt retint
+resize       single resizeBoxWithMods(anchorId, ob, nx, ny, shift, alt)
+             drives both per-object + multi-select group math
+persistence  JSON.stringify(S.objects) · FileReader · base64 images
+audio        Web Audio API · oscillator · mechanical key feel
+export       offscreen canvas · toDataURL('image/png') · alpha preserved
+```
 
 ---
 
-## deploy
+## Files
+
+```
+black_mirror/
+├── app.html        ← the entire engine. one file.
+├── logo.png        ← studio mark
+├── README.md       ← you are here
+├── overview.html   ← team persona viewer
+├── usage.md        ← interaction guide (v1.0)
+├── ux.md           ← UX research perspective
+├── designer.md     ← design perspective
+└── marketer.md     ← market perspective
+```
+
+---
+
+## Deploy
 
 GitHub Pages. No build. No CI. No config.
 
@@ -172,56 +218,23 @@ Push. Done.
 
 ---
 
-## stack
+## Contact
 
 ```
-rendering     HTML5 Canvas · ctx.setTransform · devicePixelRatio
-input         Pointer Events API · setPointerCapture · Map<pointerId>
-shapes        bounding box + angle analysis · bezier smoothing
-path edit     RDP simplification on pen lift · evenly sampled anchors
-              per-vertex drag + proportional 8-handle bbox scale
-pen close     distance-to-origin threshold · snap ring indicator
-image         FileReader → base64 · HTMLImageElement cache · drawImage
-terminal      async typewriter queue · RAF-synced · syntax highlight
-persistence   JSON.stringify(S.objects) · File API · no server
-audio         Web Audio API · oscillator · mechanical key feel
-export        OffscreenCanvas · toDataURL('image/png') · anchor link
-mobile        touch-action: manipulation · gesturestart blocked
-              vertical panel resize · fat-finger hit multiplier ×2.2
-              terminal input row: position:fixed bottom:0 +
-              safe-area-inset-bottom · glitch transform disabled
-              (transformed ancestor would trap the fixed child)
+feedback   →  kinoshita.studio@gmail.com
+              subject: Black Mirror Feedback
+              (tap the logo in-app to open the form)
+
+instagram  →  @tkinoshita99
+              instagram.com/tkinoshita99/
+
+dev log    →  /md.html  — full v0.1 → v1.0 retrospective
 ```
 
 ---
 
-## files
+<div align="center">
 
-```
-black_mirror/
-├── app.html        ← the entire engine. one file.
-├── logo.png        ← studio mark
-├── README.md       ← you are here
-├── overview.html   ← team persona viewer
-├── usage.md        ← interaction guide
-├── ux.md           ← ux research perspective
-├── designer.md     ← design perspective
-└── marketer.md     ← market perspective
-```
+*Draw to Build. — 99letters / 2026-04-16*
 
----
-
-## contact
-
-```
-feedback  →  kinoshita.studio@gmail.com
-             subject: Black Mirror Feedback
-             (tap the logo in-app to open the form)
-
-instagram →  @tkinoshita99
-             instagram.com/tkinoshita99/
-```
-
----
-
-*Draw to Build. — 99letters / 2026*
+</div>

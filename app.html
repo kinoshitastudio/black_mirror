@@ -3,7 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>BLACK MIRROR BOARD v0.9.5</title>
+    <title>⬛ BLACK MIRROR</title>
+    <!-- Favicon — inline SVG, no binary asset. JS swaps the `fill` per theme. -->
+    <link id="bmFavicon" rel="icon" type="image/svg+xml"
+          href="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect x='5' y='5' width='22' height='22' rx='2' fill='%230c0c0c'/><rect x='11' y='11' width='4' height='10' fill='%23FAFAF8'/><rect x='17' y='11' width='4' height='10' fill='%23FAFAF8'/></svg>">
     <style>
         *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -28,6 +31,78 @@
             --wb-icon:        rgba(0,0,0,0.52);
             --wb-icon-hover:  rgba(0,0,0,0.88);
             --wb-icon-active: #000000;
+            /* ── Theme tokens (light defaults) ──
+               Canvas chrome (toolbar, popovers, swatches) pulls from these
+               and `body.bm-dark` overrides them for the void theme. */
+            --bm-canvas-bg:    var(--wb);
+            --bm-canvas-grid:  rgba(0,0,0,0.05);
+            --bm-fg:           #0c0c0c;
+            --bm-fg-dim:       rgba(0,0,0,0.52);
+            --bm-tb-bg:        var(--wb);
+            --bm-tb-border:    var(--wb-border);
+            --bm-tb-icon:      var(--wb-icon);
+            --bm-tb-icon-hover:  var(--wb-icon-hover);
+            --bm-tb-icon-active: var(--wb-icon-active);
+            --bm-tb-hover-bg:  #f8f8f8;
+            --bm-tb-active-bg: #efefef;
+            --bm-pop-bg:       var(--wb);
+            --bm-pop-border:   var(--wb-border);
+            --bm-pop-shadow:   0 2px 8px rgba(0,0,0,0.08);
+            --bm-sep:          var(--wb-border);
+            --bm-accent:       #1e6fe0;
+            --bm-swatch-dark:  #111;
+            --bm-swatch-light: #FAFAF8;
+            --bm-swatch-grey:  rgba(0,0,0,0.3);
+            --bm-swatch-grey-stroke: #888;
+        }
+
+        /* ── Void theme overrides ────────────────────────────────────────── */
+        body.bm-dark {
+            --bm-canvas-bg:    #000000;
+            --bm-canvas-grid:  rgba(255,255,255,0.055);
+            --bm-fg:           #F0EDE6;
+            --bm-fg-dim:       rgba(255,255,255,0.62);
+            --bm-tb-bg:        #111111;
+            --bm-tb-border:    #3a3a3a;
+            --bm-tb-icon:      rgba(255,255,255,0.7);
+            --bm-tb-icon-hover:  #ffffff;
+            --bm-tb-icon-active: #ffffff;
+            --bm-tb-hover-bg:  #1f1f1f;
+            --bm-tb-active-bg: #2a2a2a;
+            --bm-pop-bg:       #161616;
+            --bm-pop-border:   #444;
+            --bm-pop-shadow:   0 4px 22px rgba(0,0,0,0.75);
+            --bm-sep:          #2e2e2e;
+            --bm-accent:       #4c9aff;
+            --bm-swatch-dark:  #F0EDE6;   /* black fill → renders light → swatch light */
+            --bm-swatch-light: #0c0c0c;   /* white fill → renders dark → swatch dark */
+            --bm-swatch-grey:  rgba(255,255,255,0.28);
+            --bm-swatch-grey-stroke: #aaa;
+        }
+
+        /* ── Studio theme overrides (gray mode) ───────────────────────────
+           Warm pebble ground (#DCDBD5) with electric cobalt (#1600A2) ink. */
+        body.bm-gray {
+            --bm-canvas-bg:    #DCDBD5;
+            --bm-canvas-grid:  rgba(22,0,162,0.055);
+            --bm-fg:           #1600A2;
+            --bm-fg-dim:       rgba(22,0,162,0.55);
+            --bm-tb-bg:        #ECEBE6;
+            --bm-tb-border:    #BFBDB3;
+            --bm-tb-icon:      rgba(22,0,162,0.72);
+            --bm-tb-icon-hover:  #1600A2;
+            --bm-tb-icon-active: #1600A2;
+            --bm-tb-hover-bg:  #E4E2DB;
+            --bm-tb-active-bg: #D2D0C6;
+            --bm-pop-bg:       #ECEBE6;
+            --bm-pop-border:   #BFBDB3;
+            --bm-pop-shadow:   0 4px 18px rgba(22,0,162,0.14);
+            --bm-sep:          #BFBDB3;
+            --bm-accent:       #1600A2;
+            --bm-swatch-dark:  #1600A2;   /* black fill → renders accent blue */
+            --bm-swatch-light: #FAFAF8;   /* white choice — neutral vs ground */
+            --bm-swatch-grey:  rgba(22,0,162,0.24);
+            --bm-swatch-grey-stroke: #1600A2;
         }
 
         html, body { height: 100%; overflow: hidden; }
@@ -618,34 +693,83 @@
         .usage-close:hover { border-color: var(--glow); color: var(--glow); }
 
         /* ── DARK CANVAS MODE ─────────────────────────────────────────────── */
-        body.bm-dark .canvas-panel { background: #000000; }
-        body.bm-dark .canvas-panel::before {
+        /* All surfaces read from theme tokens so a single mode flip cascades
+           across the whole UI (toolbar, popovers, swatches, separators). */
+        body.bm-dark .canvas-panel,
+        body.bm-gray .canvas-panel { background: var(--bm-canvas-bg); }
+        body.bm-dark .canvas-panel::before,
+        body.bm-gray .canvas-panel::before {
             background-image:
-                linear-gradient(rgba(255,255,255,0.055) 1px, transparent 1px),
-                linear-gradient(90deg, rgba(255,255,255,0.055) 1px, transparent 1px);
+                linear-gradient(var(--bm-canvas-grid) 1px, transparent 1px),
+                linear-gradient(90deg, var(--bm-canvas-grid) 1px, transparent 1px);
         }
+        body.bm-dark .toolbar,
+        body.bm-gray .toolbar {
+            background: var(--bm-tb-bg);
+            border-right-color: var(--bm-tb-border);
+            border-bottom-color: var(--bm-tb-border);
+        }
+        body.bm-dark .toolbar .tool-btn,
+        body.bm-gray .toolbar .tool-btn        { color: var(--bm-tb-icon); border-color: transparent; }
+        body.bm-dark .toolbar .tool-btn:hover,
+        body.bm-gray .toolbar .tool-btn:hover  { background: var(--bm-tb-hover-bg);  border-color: var(--bm-tb-border); color: var(--bm-tb-icon-hover); }
+        body.bm-dark .toolbar .tool-btn.active,
+        body.bm-gray .toolbar .tool-btn.active { background: var(--bm-tb-active-bg); border-color: var(--bm-accent);     color: var(--bm-tb-icon-active); box-shadow: 0 0 0 1px var(--bm-accent) inset; }
+        body.bm-dark .tool-sep,
+        body.bm-gray .tool-sep                 { background: var(--bm-sep); }
+        body.bm-dark .tool-popover,
+        body.bm-gray .tool-popover             {
+            background: var(--bm-pop-bg);
+            border-color: var(--bm-pop-border);
+            box-shadow: var(--bm-pop-shadow);
+        }
+        body.bm-dark .tool-popover .tool-btn,
+        body.bm-gray .tool-popover .tool-btn        { color: var(--bm-tb-icon); border-color: transparent; }
+        body.bm-dark .tool-popover .tool-btn:hover,
+        body.bm-gray .tool-popover .tool-btn:hover  { background: var(--bm-tb-hover-bg);  border-color: var(--bm-tb-border); color: var(--bm-tb-icon-hover); }
+        body.bm-dark .tool-popover .tool-btn.active,
+        body.bm-gray .tool-popover .tool-btn.active { background: var(--bm-tb-active-bg); border-color: var(--bm-accent);     color: var(--bm-tb-icon-active); box-shadow: 0 0 0 1px var(--bm-accent) inset; }
+        body.bm-dark .tool-popover .w-btn,
+        body.bm-gray .tool-popover .w-btn            { color: var(--bm-tb-icon); border-color: transparent; }
+        body.bm-dark .tool-popover .w-btn:hover,
+        body.bm-gray .tool-popover .w-btn:hover      { background: var(--bm-tb-hover-bg);  border-color: var(--bm-tb-border); }
+        body.bm-dark .tool-popover .w-btn.active,
+        body.bm-gray .tool-popover .w-btn.active     { background: var(--bm-tb-active-bg); border-color: var(--bm-accent); color: var(--bm-tb-icon-active); }
+        body.bm-dark .pop-sep-line,
+        body.bm-gray .pop-sep-line { background: var(--bm-sep); }
+        body.bm-dark .pop-label,
+        body.bm-gray .pop-label    { color: var(--bm-fg-dim); }
+
+        /* Fill swatches — picked up by inline SVG via class, flip with theme */
+        .sw-black { fill: var(--bm-swatch-dark);  stroke: var(--bm-swatch-dark); }
+        .sw-white { fill: var(--bm-swatch-light); stroke: var(--bm-swatch-grey-stroke); }
+        .sw-grey  { fill: var(--bm-swatch-grey);  stroke: var(--bm-swatch-grey-stroke); }
+        .sw-ind   { fill: var(--bm-swatch-dark);  stroke: var(--bm-swatch-dark); }
+
+        /* Toolbar contrast in dark mode — lift off pure-black canvas */
         body.bm-dark .toolbar {
-            background: #080808;
-            border-right-color: #1e1e1e;
+            background: #181818;
+            box-shadow: 1px 0 0 #000, 2px 0 12px rgba(0,0,0,0.55);
         }
-        body.bm-dark .toolbar .tool-btn        { color: rgba(255,255,255,0.44); }
-        body.bm-dark .toolbar .tool-btn:hover  { background:#181818; border-color:#2e2e2e; color:rgba(255,255,255,0.9); }
-        body.bm-dark .toolbar .tool-btn.active { background:#222; border-color:#4e4e4e; color:#FAFAF8; }
-        body.bm-dark .tool-sep                 { background: #1c1c1c; }
-        body.bm-dark .tool-popover             { background: #0c0c0c; border-color: #2a2a2a; box-shadow: 2px 4px 18px rgba(0,0,0,0.7); }
-        body.bm-dark .tool-popover .tool-btn        { color: rgba(255,255,255,0.44); }
-        body.bm-dark .tool-popover .tool-btn:hover  { background:#181818; border-color:#2e2e2e; color:rgba(255,255,255,0.9); }
-        body.bm-dark .tool-popover .tool-btn.active { background:#222; border-color:#4e4e4e; color:#FAFAF8; }
-        body.bm-dark .tool-popover .w-btn            { color: rgba(255,255,255,0.44); }
-        body.bm-dark .tool-popover .w-btn:hover      { background:#181818; border-color:#2e2e2e; }
-        body.bm-dark .tool-popover .w-btn.active     { background:#222; border-color:#4e4e4e; color:#FAFAF8; }
-        body.bm-dark .pop-sep-line { background: #1c1c1c; }
-        body.bm-dark .pop-label    { color: #3a3a3a; }
-        body.bm-dark .shape-hint   { color: #1a1a1a; }
+        /* Toolbar contrast in gray mode — subtle warm shelf on pebble ground */
+        body.bm-gray .toolbar {
+            border-right: 1px solid var(--bm-tb-border);
+            box-shadow: 2px 0 10px rgba(22,0,162,0.06);
+        }
+        body.bm-gray .tool-popover {
+            border: 1px solid var(--bm-pop-border);
+        }
+        body.bm-dark .shape-hint   { color: rgba(255,255,255,0.22); }
+        body.bm-gray .shape-hint   { color: rgba(22,0,162,0.35); }
         body.bm-dark #textOverlay input {
             border-bottom-color: #F0EDE6;
             color: #F0EDE6;
             caret-color: #F0EDE6;
+        }
+        body.bm-gray #textOverlay input {
+            border-bottom-color: #1600A2;
+            color: #1600A2;
+            caret-color: #1600A2;
         }
 
         /* ── Mode transition: scan overlay ─────────────────────────────────── */
@@ -768,7 +892,7 @@
              draggable="false"
              onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
         <span class="logo-fallback" style="display:none">
-            <span class="logo-mark">◼</span>BLACK MIRROR BOARD<span class="logo-ver">v0.9</span>
+            <span class="logo-mark">◼</span>BLACK MIRROR BOARD<span class="logo-ver">v1.0</span>
         </span>
     </button>
     <div class="header-right">
@@ -984,13 +1108,13 @@
             <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="1" width="10" height="10"/></svg>
         </button>
         <button class="tool-btn" data-fill="black" title="Fill black">
-            <svg width="12" height="12" viewBox="0 0 12 12"><rect x="1" y="1" width="10" height="10" fill="#111" stroke="#111" stroke-width="1"/></svg>
+            <svg width="12" height="12" viewBox="0 0 12 12"><rect class="sw-black" x="1" y="1" width="10" height="10" stroke-width="1"/></svg>
         </button>
         <button class="tool-btn" data-fill="grey"  title="Fill grey">
-            <svg width="12" height="12" viewBox="0 0 12 12"><rect x="1" y="1" width="10" height="10" fill="rgba(0,0,0,0.25)" stroke="#888" stroke-width="1.5"/></svg>
+            <svg width="12" height="12" viewBox="0 0 12 12"><rect class="sw-grey" x="1" y="1" width="10" height="10" stroke-width="1.5"/></svg>
         </button>
         <button class="tool-btn" data-fill="white" title="Fill white">
-            <svg width="12" height="12" viewBox="0 0 12 12"><rect x="1" y="1" width="10" height="10" fill="#FAFAF8" stroke="#aaa" stroke-width="1.5"/></svg>
+            <svg width="12" height="12" viewBox="0 0 12 12"><rect class="sw-white" x="1" y="1" width="10" height="10" stroke-width="1.5"/></svg>
         </button>
     </div>
     <div class="pop-sep-line"></div>
@@ -1016,13 +1140,13 @@
             <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="1" width="10" height="10"/></svg>
         </button>
         <button class="tool-btn" data-fill="black" title="Fill black">
-            <svg width="12" height="12" viewBox="0 0 12 12"><rect x="1" y="1" width="10" height="10" fill="#111" stroke="#111" stroke-width="1"/></svg>
+            <svg width="12" height="12" viewBox="0 0 12 12"><rect class="sw-black" x="1" y="1" width="10" height="10" stroke-width="1"/></svg>
         </button>
         <button class="tool-btn" data-fill="grey"  title="Fill grey">
-            <svg width="12" height="12" viewBox="0 0 12 12"><rect x="1" y="1" width="10" height="10" fill="rgba(0,0,0,0.25)" stroke="#888" stroke-width="1.5"/></svg>
+            <svg width="12" height="12" viewBox="0 0 12 12"><rect class="sw-grey" x="1" y="1" width="10" height="10" stroke-width="1.5"/></svg>
         </button>
         <button class="tool-btn" data-fill="white" title="Fill white">
-            <svg width="12" height="12" viewBox="0 0 12 12"><rect x="1" y="1" width="10" height="10" fill="#FAFAF8" stroke="#aaa" stroke-width="1.5"/></svg>
+            <svg width="12" height="12" viewBox="0 0 12 12"><rect class="sw-white" x="1" y="1" width="10" height="10" stroke-width="1.5"/></svg>
         </button>
     </div>
     <div class="pop-sep-line"></div>
@@ -1043,7 +1167,7 @@
 <!-- Usage overlay -->
 <div id="usageOverlay">
     <div class="usage-box">
-        <h2>USAGE — BLACK MIRROR BOARD v0.9.5</h2>
+        <h2>USAGE — BLACK MIRROR BOARD v1.0</h2>
         <h3>TOOLS</h3>
         <pre><b>↑ Select</b>   tap/click · drag to move · Del to delete
          ↳ drag ○ handle above box to rotate
@@ -1097,6 +1221,7 @@ Set before drawing, or apply to selected object.</pre>
         <h3>TERMINAL COMMANDS</h3>
         <pre><b>dark</b> / <b>dark mode</b>   embrace the void
 <b>light</b> / <b>light mode</b>  return to surface
+<b>gray</b> / <b>gray mode</b>   enter the studio (cobalt on pebble)
 <b>youtube</b>            a surprise awaits
 <b>help</b>               show this reference
 <b>clear</b>              flush terminal</pre>
@@ -1152,38 +1277,109 @@ const S = {
     pathHover:       null,      // {x,y} current cursor pos for preview segment
     pathSnapClose:   false,     // cursor near first anchor → closing
     pathDrag:        null,      // { mode:'newHandle'|'moveAnchor'|'moveHandle', idx, which?, startPt, orig } while dragging in path tool
+    hoveredId:       null,      // object under cursor while idle (select tool) — drives hover glow + cursor
+    modifiers:       { shift: false, alt: false }, // live keyboard modifier state for resize constraints
 };
 
 const VIEW = { scale: 1, tx: 0, ty: 0 };
 
 const FILL_COLORS = { none: null, black: '#0c0c0c', grey: 'rgba(0,0,0,0.12)', white: '#FAFAF8' };
 
-// ── Dark Mode ──────────────────────────────────────────────────────────────
-let DARK_MODE = false;
+// ── Theme Mode ─────────────────────────────────────────────────────────────
+// 'light' (default surface), 'dark' (void), 'gray' (studio — #DCDBD5 / #1600A2)
+let MODE = 'light';
 
 // Current stroke color (objects, text, pen strokes)
-function getStrokeColor()  { return DARK_MODE ? '#F0EDE6' : '#0c0c0c'; }
+function getStrokeColor() {
+    if (MODE === 'dark') return '#F0EDE6';
+    if (MODE === 'gray') return '#1600A2';
+    return '#0c0c0c';
+}
 // Preview overlay color while dragging shapes
-function getPreviewColor() { return DARK_MODE ? 'rgba(240,237,230,0.35)' : 'rgba(12,12,12,0.35)'; }
+function getPreviewColor() {
+    if (MODE === 'dark') return 'rgba(240,237,230,0.35)';
+    if (MODE === 'gray') return 'rgba(22,0,162,0.4)';
+    return 'rgba(12,12,12,0.35)';
+}
 
-// Map canonical light-mode fill values → dark-mode equivalents (and vice-versa for rendering)
-// Objects always store light-mode values; rendering converts on the fly.
+// Map canonical light-mode fill values → active-mode equivalents.
+// Objects always store light-mode canonical values; rendering converts on the fly.
+// Case-insensitive + generic hex/rgba fallback so any fill value maps cleanly.
 function resolveFill(fill) {
     if (!fill || fill === 'none') return null;
-    if (!DARK_MODE) return fill;
-    if (fill === '#0c0c0c')          return '#F0EDE6';
-    if (fill === 'rgba(0,0,0,0.12)') return 'rgba(255,255,255,0.15)';
-    if (fill === '#FAFAF8')          return '#0c0c0c';
-    return fill; // unknown value (e.g. custom / image data) — pass through
+    if (MODE === 'light') return fill;
+    const f = typeof fill === 'string' ? fill.trim().toLowerCase().replace(/\s+/g, '') : fill;
+
+    if (MODE === 'gray') {
+        // Solid dark → accent. Translucent → translucent accent. Solid white → keep.
+        if (f === '#0c0c0c')          return '#1600A2';
+        if (f === '#fafaf8')          return '#FAFAF8';
+        if (f === 'rgba(0,0,0,0.12)') return 'rgba(22,0,162,0.22)';
+        if (/^#([0-9a-f]{6})$/.test(f)) return '#1600A2';
+        const m = /^rgba?\((\d+),(\d+),(\d+)(?:,([\d.]+))?\)$/.exec(f);
+        if (m) {
+            const a = m[4] !== undefined ? m[4] : 1;
+            return `rgba(22,0,162,${a})`;
+        }
+        return fill;
+    }
+
+    // dark
+    if (f === '#0c0c0c')          return '#F0EDE6';
+    if (f === '#fafaf8')          return '#0c0c0c';
+    if (f === 'rgba(0,0,0,0.12)') return 'rgba(255,255,255,0.15)';
+    let m = /^#([0-9a-f]{6})$/.exec(f);
+    if (m) {
+        const n = parseInt(m[1], 16);
+        const r = 255 - ((n >> 16) & 0xff);
+        const g = 255 - ((n >> 8)  & 0xff);
+        const b = 255 -  (n        & 0xff);
+        return `rgb(${r},${g},${b})`;
+    }
+    m = /^rgba?\((\d+),(\d+),(\d+)(?:,([\d.]+))?\)$/.exec(f);
+    if (m) {
+        const r = 255 - +m[1], g = 255 - +m[2], b = 255 - +m[3];
+        const a = m[4] !== undefined ? m[4] : 1;
+        return `rgba(${r},${g},${b},${a})`;
+    }
+    return fill;
 }
 
-function setDarkMode(dark) {
-    if (DARK_MODE === dark) return;
-    DARK_MODE = dark;
-    triggerModeTransition(dark);
+// Tab branding — title + favicon swap to reflect active mode.
+// Light:  ⬛ black mark on light ground
+// Dark:   ⬜ white mark on void ground
+// Gray:   ◼ cobalt mark on pebble ground
+const TAB_BRAND = {
+    light: { emoji: '⬛', mark: '#0c0c0c', slot: '#FAFAF8' },
+    dark:  { emoji: '⬜', mark: '#F0EDE6', slot: '#0c0c0c' },
+    gray:  { emoji: '◼', mark: '#1600A2', slot: '#DCDBD5' },
+};
+function applyTabBrand(mode) {
+    const b = TAB_BRAND[mode] || TAB_BRAND.light;
+    document.title = `${b.emoji} BLACK MIRROR`;
+    const fav = document.getElementById('bmFavicon');
+    if (fav) {
+        // Minimalist BM glyph: rounded square ground + two vertical slots
+        // (a pixel-art shorthand for "B" that reads at 16×16).
+        const svg =
+            `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'>` +
+              `<rect x='5' y='5' width='22' height='22' rx='2' fill='${encodeURIComponent(b.mark)}'/>` +
+              `<rect x='11' y='11' width='4' height='10' fill='${encodeURIComponent(b.slot)}'/>` +
+              `<rect x='17' y='11' width='4' height='10' fill='${encodeURIComponent(b.slot)}'/>` +
+            `</svg>`;
+        fav.setAttribute('href', 'data:image/svg+xml;utf8,' + svg);
+    }
 }
 
-function triggerModeTransition(dark) {
+function setMode(next) {
+    if (MODE === next) return;
+    MODE = next;
+    triggerModeTransition(next);
+}
+// Back-compat shim — external callers may still invoke setDarkMode(bool)
+function setDarkMode(dark) { setMode(dark ? 'dark' : 'light'); }
+
+function triggerModeTransition(next) {
     const overlay = document.getElementById('modeOverlay');
     const panel   = document.getElementById('cp');
 
@@ -1195,12 +1391,16 @@ function triggerModeTransition(dark) {
 
     // Phase 2 — switch mode & redraw, then run the scan overlay
     setTimeout(() => {
-        document.body.classList.toggle('bm-dark', dark);
+        document.body.classList.remove('bm-dark', 'bm-gray');
+        if (next === 'dark')      document.body.classList.add('bm-dark');
+        else if (next === 'gray') document.body.classList.add('bm-gray');
+        applyTabBrand(next);
         redrawAll();
 
-        overlay.style.background = dark
-            ? 'rgba(0,0,0,0.85)'
-            : 'rgba(252,250,246,0.9)';
+        overlay.style.background =
+            next === 'dark' ? 'rgba(0,0,0,0.85)' :
+            next === 'gray' ? 'rgba(220,219,213,0.92)' :
+                              'rgba(252,250,246,0.9)';
         overlay.classList.remove('bm-scanning');
         void overlay.offsetWidth;
         overlay.classList.add('bm-scanning');
@@ -1346,8 +1546,22 @@ function initCanvas() {
             updateZoomLabel(); redrawAll(); return;
         }
 
-        if (S.isDown || S.rotateId || S.anchorDrag) onMove(e.clientX, e.clientY);
+        if (S.isDown || S.rotateId || S.anchorDrag) {
+            onMove(e.clientX, e.clientY);
+        } else if (e.pointerType !== 'touch' && S.tool === 'select' && !S.spaceDown) {
+            // Idle hover — light-weight hit test to feedback grab-ability
+            updateHover(e.clientX, e.clientY);
+        }
     }, { passive: false });
+
+    // Clear hover when cursor leaves the canvas
+    canvas.addEventListener('pointerleave', () => {
+        if (S.hoveredId != null) {
+            S.hoveredId = null;
+            canvas.style.cursor = S.spaceDown ? 'grab' : toolCursor(S.tool);
+            redrawAll();
+        }
+    });
 
     const endPtr = e => {
         ptrs.delete(e.pointerId);
@@ -1392,6 +1606,40 @@ function initCanvas() {
 
 function toolCursor(tool) {
     return tool==='select' ? 'default' : tool==='eraser' ? 'cell' : 'crosshair';
+}
+
+// Idle hover: detect grab-able object under cursor, swap cursor + trigger glow.
+// If a resize handle of the active selection is hovered, show a directional cursor.
+function updateHover(cx, cy) {
+    const p = getPos(cx, cy);
+
+    // 1. Resize-handle hover on the currently-selected object (highest priority)
+    const sel = S.objects.find(o => o.selected);
+    if (sel) {
+        const c   = getObjCenter(sel);
+        const rot = sel.data.rotation || 0;
+        const rp  = rot !== 0 ? rotPt(p, c, -rot) : { ...p };
+        const handle = getAnchors(sel).find(a => {
+            if (!RESIZE_CURSORS[a.id]) return false;
+            return Math.hypot(rp.x - a.x, rp.y - a.y) < 9 / VIEW.scale;
+        });
+        if (handle) {
+            canvas.style.cursor = RESIZE_CURSORS[handle.id];
+            if (S.hoveredId !== null) { S.hoveredId = null; redrawAll(); }
+            return;
+        }
+    }
+
+    // 2. Body hover — show move cursor + dashed hint
+    const hit = [...S.objects].reverse().find(o => hitTest(o, p.x, p.y, 0));
+    const nextId = hit ? hit.id : null;
+    if (nextId !== S.hoveredId) {
+        S.hoveredId = nextId;
+        canvas.style.cursor = nextId ? 'move' : toolCursor(S.tool);
+        redrawAll();
+    } else if (!nextId) {
+        canvas.style.cursor = toolCursor(S.tool);
+    }
 }
 
 function resizeCanvas() {
@@ -1506,6 +1754,8 @@ function onDown(cx, cy, isTouch = false) {
                     S.multiResizeId   = hitRA.id;
                     S.multiResizeOrig = { groupBounds: { ...hb }, objDataMap };
                     S.isDown = true;
+                    const rc = RESIZE_CURSORS[hitRA.id];
+                    if (rc) document.body.style.cursor = rc;
                     return;
                 }
                 // 2. Rotation handle
@@ -1557,6 +1807,9 @@ function onDown(cx, cy, isTouch = false) {
                     origBounds: getObjBounds(prevSel),
                     origData:   JSON.parse(JSON.stringify(prevSel.data)),
                 };
+                // Swap to a directional resize cursor so the drag feels native.
+                const rc = RESIZE_CURSORS[hitAnch.id];
+                if (rc) document.body.style.cursor = rc;
                 return;
             }
         }
@@ -1738,6 +1991,8 @@ function onMove(cx, cy) {
             const c   = getObjCenter(obj);
             const rot = obj.data.rotation || 0;
             const rp  = rot !== 0 ? rotPt(p, c, -rot) : { ...p };
+            // Cache rotated pointer so keydown/keyup on Shift/Alt can re-apply mid-gesture
+            S.lastAnchorPt = rp;
             applyAnchor(obj, S.anchorDrag.anchorId, rp.x, rp.y);
             redrawAll();
         }
@@ -1873,9 +2128,9 @@ function onUp() {
         S.isDown = false;
         return;
     }
-    if (S.anchorDrag)    { S.anchorDrag = null; saveHistory(); S.isDown = false; return; }
+    if (S.anchorDrag)    { S.anchorDrag = null; S.lastAnchorPt = null; document.body.style.cursor = ''; saveHistory(); S.isDown = false; return; }
     if (S.rotateId)      { S.rotateId   = null; saveHistory(); S.isDown = false; return; }
-    if (S.multiResizeId) { S.multiResizeId = null; S.multiResizeOrig = null; saveHistory(); S.isDown = false; return; }
+    if (S.multiResizeId) { S.multiResizeId = null; S.multiResizeOrig = null; document.body.style.cursor = ''; saveHistory(); S.isDown = false; return; }
     if (S.multiRotId)    { S.multiRotId = false; saveHistory(); S.isDown = false; return; }
     if (S.multiDragOff)  { S.multiDragOff = null; saveHistory(); S.isDown = false; return; }
 
@@ -1886,10 +2141,14 @@ function onUp() {
         const mx2 = Math.max(S.marquee.x1, S.marquee.x2);
         const my2 = Math.max(S.marquee.y1, S.marquee.y2);
         if (mx2 - mx1 > 4 || my2 - my1 > 4) {
+            // Use AABB intersection (matches expanded hit-test padding) so thin
+            // strokes/arrows that just graze the marquee still get selected.
+            const hitPad = 6;
             S.objects.forEach(o => {
                 const b = getObjBounds(o);
-                o.selected = !!(b && b.x >= mx1 && b.y >= my1 &&
-                                (b.x + b.w) <= mx2 && (b.y + b.h) <= my2);
+                o.selected = !!(b &&
+                    (b.x - hitPad) <= mx2 && (b.x + b.w + hitPad) >= mx1 &&
+                    (b.y - hitPad) <= my2 && (b.y + b.h + hitPad) >= my1);
             });
             const sel = S.objects.filter(o => o.selected);
             if (sel.length === 1) {
@@ -1956,15 +2215,39 @@ function redrawAll() {
     // Marquee selection rectangle
     if (S.marquee) {
         const { x1, y1, x2, y2 } = S.marquee;
+        const mStroke = MODE === 'dark' ? 'rgba(255,255,255,0.7)' :
+                        MODE === 'gray' ? 'rgba(255,255,255,0.95)' :
+                                          'rgba(22,0,162,0.7)';
+        const mFill   = MODE === 'dark' ? 'rgba(255,255,255,0.05)' :
+                        MODE === 'gray' ? 'rgba(255,255,255,0.1)' :
+                                          'rgba(22,0,162,0.06)';
         ctx.save();
-        ctx.strokeStyle = 'rgba(30,111,224,0.7)';
+        ctx.strokeStyle = mStroke;
         ctx.lineWidth   = 1.5 / VIEW.scale;
         ctx.setLineDash([5/VIEW.scale, 3/VIEW.scale]);
         ctx.strokeRect(Math.min(x1,x2), Math.min(y1,y2), Math.abs(x2-x1), Math.abs(y2-y1));
-        ctx.fillStyle = 'rgba(30,111,224,0.05)';
+        ctx.fillStyle = mFill;
         ctx.fillRect(Math.min(x1,x2), Math.min(y1,y2), Math.abs(x2-x1), Math.abs(y2-y1));
         ctx.setLineDash([]);
         ctx.restore();
+    }
+
+    // Hover hint — soft dashed bounds around the idle-hovered object
+    if (S.hoveredId && S.tool === 'select' && !S.isDown && !S.anchorDrag && !S.rotateId && !S.marquee) {
+        const h = S.objects.find(o => o.id === S.hoveredId);
+        if (h && !h.selected && !S.multiSelected.includes(h.id)) {
+            const b = getObjBounds(h);
+            if (b) {
+                const p  = 5 / VIEW.scale;
+                ctx.save();
+                ctx.strokeStyle = getHoverHintStroke();
+                ctx.lineWidth   = 1 / VIEW.scale;
+                ctx.setLineDash([3/VIEW.scale, 3/VIEW.scale]);
+                ctx.strokeRect(b.x - p, b.y - p, b.w + 2*p, b.h + 2*p);
+                ctx.setLineDash([]);
+                ctx.restore();
+            }
+        }
     }
 
     // Multi-select combined bounding box
@@ -2380,12 +2663,30 @@ function renderPreview() {
 }
 
 // Selection box + rotation handle — drawn in rotated context
+// Selection chrome colors — maximize contrast against each theme's canvas
+function getSelBoxStroke() {
+    if (MODE === 'dark') return 'rgba(255,255,255,0.62)';
+    if (MODE === 'gray') return 'rgba(255,255,255,0.95)';
+    return 'rgba(22,0,162,0.6)';
+}
+function getSelHandleStroke() {
+    if (MODE === 'dark') return 'rgba(255,255,255,0.8)';
+    if (MODE === 'gray') return '#ffffff';
+    return 'rgba(22,0,162,0.78)';
+}
+// Soft hover-hint color (shown before selection)
+function getHoverHintStroke() {
+    if (MODE === 'dark') return 'rgba(255,255,255,0.38)';
+    if (MODE === 'gray') return 'rgba(255,255,255,0.75)';
+    return 'rgba(22,0,162,0.38)';
+}
+
 function selBox(x, y, w, h) {
     const p  = 6  / VIEW.scale;
     const lw = 1  / VIEW.scale;
     ctx.save();
     // Dashed selection rect
-    ctx.strokeStyle = 'rgba(0,0,0,0.28)'; ctx.lineWidth = lw;
+    ctx.strokeStyle = getSelBoxStroke(); ctx.lineWidth = lw;
     ctx.setLineDash([4/VIEW.scale, 3/VIEW.scale]);
     ctx.strokeRect(x-p, y-p, w+2*p, h+2*p);
     ctx.setLineDash([]);
@@ -2395,7 +2696,7 @@ function selBox(x, y, w, h) {
     const hy = y - p - 24/VIEW.scale;
     const hr = 5/VIEW.scale;
 
-    ctx.strokeStyle = 'rgba(0,0,0,0.42)'; ctx.lineWidth = lw;
+    ctx.strokeStyle = getSelHandleStroke(); ctx.lineWidth = lw;
     // Stem line
     ctx.beginPath(); ctx.moveTo(hx, y-p); ctx.lineTo(hx, hy+hr); ctx.stroke();
     // Circle handle
@@ -2474,21 +2775,10 @@ function getMultiResizeAnchors(mb) {
 
 // Compute new group bbox given anchor being dragged to (nx, ny)
 function computeNewGroupBounds(origGB, anchorId, nx, ny) {
-    const {x: ox, y: oy, w: ow, h: oh} = origGB;
-    const MIN = 8, fx = ox+ow, fy = oy+oh;
-    let nBx, nBy, nBw, nBh;
-    switch (anchorId) {
-        case 'tl': nBw=Math.max(MIN,fx-nx); nBh=Math.max(MIN,fy-ny); nBx=fx-nBw; nBy=fy-nBh; break;
-        case 'tm': nBx=ox; nBw=ow;          nBh=Math.max(MIN,fy-ny); nBy=fy-nBh; break;
-        case 'tr': nBx=ox; nBw=Math.max(MIN,nx-ox); nBh=Math.max(MIN,fy-ny); nBy=fy-nBh; break;
-        case 'rm': nBx=ox; nBy=oy; nBw=Math.max(MIN,nx-ox); nBh=oh; break;
-        case 'br': nBx=ox; nBy=oy; nBw=Math.max(MIN,nx-ox); nBh=Math.max(MIN,ny-oy); break;
-        case 'bm': nBx=ox; nBy=oy; nBw=ow; nBh=Math.max(MIN,ny-oy); break;
-        case 'bl': nBw=Math.max(MIN,fx-nx); nBx=fx-nBw; nBy=oy; nBh=Math.max(MIN,ny-oy); break;
-        case 'lm': nBw=Math.max(MIN,fx-nx); nBx=fx-nBw; nBy=oy; nBh=oh; break;
-        default: return origGB;
-    }
-    return { x:nBx, y:nBy, w:nBw, h:nBh };
+    const mods = S.modifiers || { shift:false, alt:false };
+    const r = resizeBoxWithMods(anchorId, origGB, nx, ny, mods.shift, mods.alt);
+    if (!r) return origGB;
+    return { x:r.nBx, y:r.nBy, w:r.nBw, h:r.nBh };
 }
 
 // Scale one object's geometry from origGB → newGB coordinate space
@@ -2545,6 +2835,26 @@ function scaleObjToGroupBounds(obj, origData, origGB, newGB) {
 // HIT TEST & MOVE
 // ══════════════════════════════════════════════════
 
+// Distance from point (px,py) to segment (x1,y1)–(x2,y2)
+function pointToSegDist(px, py, x1, y1, x2, y2) {
+    const dx = x2 - x1, dy = y2 - y1;
+    const len2 = dx*dx + dy*dy;
+    if (len2 === 0) return Math.hypot(px - x1, py - y1);
+    let t = ((px - x1) * dx + (py - y1) * dy) / len2;
+    t = Math.max(0, Math.min(1, t));
+    return Math.hypot(px - (x1 + t*dx), py - (y1 + t*dy));
+}
+
+// Ray-cast point-in-polygon (for closed stroke fills)
+function pointInPoly(px, py, pts) {
+    let inside = false;
+    for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+        const xi = pts[i].x, yi = pts[i].y, xj = pts[j].x, yj = pts[j].y;
+        if (((yi > py) !== (yj > py)) && (px < (xj - xi) * (py - yi) / (yj - yi) + xi)) inside = !inside;
+    }
+    return inside;
+}
+
 function hitTest(obj, x, y, extraPad = 0) {
     // Rotate test point to unrotated space
     const c   = getObjCenter(obj);
@@ -2568,10 +2878,8 @@ function hitTest(obj, x, y, extraPad = 0) {
         }
         case 'arrow': {
             const {x1,y1,x2,y2} = obj.data;
-            const len2 = (x2-x1)**2+(y2-y1)**2;
-            if (!len2) return Math.hypot(px-x1,py-y1)<pad;
-            const t = Math.max(0,Math.min(1,((px-x1)*(x2-x1)+(py-y1)*(y2-y1))/len2));
-            return Math.hypot(px-(x1+t*(x2-x1)), py-(y1+t*(y2-y1))) < 12;
+            // 8px base padding around the shaft — scales up with touch (+extraPad)
+            return pointToSegDist(px, py, x1, y1, x2, y2) < (8 + extraPad);
         }
         case 'text': {
             const {x: ox, y: oy, text, fontSize} = obj.data;
@@ -2579,11 +2887,21 @@ function hitTest(obj, x, y, extraPad = 0) {
             return px >= ox-pad && px <= ox+text.length*fs*0.6+pad && py >= oy-fs-pad && py <= oy+fs*0.3+pad;
         }
         case 'stroke': {
-            const bb = strokeBBox(obj.data.pts);
-            const margin = 20 + extraPad;
-            if (px<bb.x-margin||px>bb.x+bb.w+margin||py<bb.y-margin||py>bb.y+bb.h+margin) return false;
-            const bodyR = 14 + extraPad; // touch (+14) → 28px, mouse → 14px
-            return obj.data.pts.some(pt => Math.hypot(px-pt.x, py-pt.y) < bodyR);
+            const pts = obj.data.pts;
+            if (!pts || pts.length < 1) return false;
+            const lw     = obj.data.lw || 2;
+            const bodyR  = Math.max(8, lw / 2 + 6) + extraPad; // ≥8px around visual line
+            const margin = bodyR + 4;
+            const bb = strokeBBox(pts);
+            if (px < bb.x - margin || px > bb.x + bb.w + margin ||
+                py < bb.y - margin || py > bb.y + bb.h + margin) return false;
+            // Segment-based distance — fills the gaps between simplified vertices
+            for (let i = 1; i < pts.length; i++) {
+                if (pointToSegDist(px, py, pts[i-1].x, pts[i-1].y, pts[i].x, pts[i].y) < bodyR) return true;
+            }
+            // Closed + filled shapes: interior is also hittable
+            if (obj.data.closed && obj.data.fill && pointInPoly(px, py, pts)) return true;
+            return false;
         }
         case 'image': {
             const {x: ox, y: oy, w, h} = obj.data;
@@ -2779,6 +3097,102 @@ function getAnchors(obj) {
     }
 }
 
+// Bbox resize anchors → CSS cursors (for nwse/nesw/ns/ew feedback during drag and hover)
+const RESIZE_CURSORS = {
+    tl: 'nwse-resize', br: 'nwse-resize',
+    tr: 'nesw-resize', bl: 'nesw-resize',
+    tm: 'ns-resize',   bm: 'ns-resize',
+    lm: 'ew-resize',   rm: 'ew-resize',
+    // circle cardinal handles
+    top: 'ns-resize', bot: 'ns-resize',
+    left: 'ew-resize', right: 'ew-resize',
+};
+
+// Compute a constrained resize box given the raw pointer position + modifier keys.
+// shift = lock aspect ratio. alt = anchor to the original center (symmetric scale).
+// Returns null for unknown anchors so callers can fall through.
+function resizeBoxWithMods(anchorId, ob, nx, ny, shift, alt) {
+    const { x: ox, y: oy, w: ow, h: oh } = ob;
+    const MIN = 4, fx = ox + ow, fy = oy + oh;
+    const cx = ox + ow / 2, cy = oy + oh / 2;
+    const aspect = ow / (oh || 1);
+
+    let nBx, nBy, nBw, nBh;
+    switch (anchorId) {
+        case 'tl': nBw=Math.max(MIN,fx-nx); nBh=Math.max(MIN,fy-ny); nBx=fx-nBw; nBy=fy-nBh; break;
+        case 'tm': nBx=ox; nBw=ow;          nBh=Math.max(MIN,fy-ny); nBy=fy-nBh; break;
+        case 'tr': nBx=ox; nBw=Math.max(MIN,nx-ox); nBh=Math.max(MIN,fy-ny); nBy=fy-nBh; break;
+        case 'rm': nBx=ox; nBy=oy; nBw=Math.max(MIN,nx-ox); nBh=oh; break;
+        case 'br': nBx=ox; nBy=oy; nBw=Math.max(MIN,nx-ox); nBh=Math.max(MIN,ny-oy); break;
+        case 'bm': nBx=ox; nBy=oy; nBw=ow; nBh=Math.max(MIN,ny-oy); break;
+        case 'bl': nBw=Math.max(MIN,fx-nx); nBx=fx-nBw; nBy=oy; nBh=Math.max(MIN,ny-oy); break;
+        case 'lm': nBw=Math.max(MIN,fx-nx); nBx=fx-nBw; nBy=oy; nBh=oh; break;
+        default: return null;
+    }
+
+    const isCorner = anchorId === 'tl' || anchorId === 'tr' || anchorId === 'bl' || anchorId === 'br';
+
+    // ── Shift: aspect-ratio lock ───────────────────────────────────────────
+    if (shift && ow > 0.5 && oh > 0.5) {
+        if (isCorner) {
+            // Dominant axis wins — use the bigger scale magnitude
+            const sx = nBw / ow, sy = nBh / oh;
+            const s  = Math.abs(sx - 1) >= Math.abs(sy - 1) ? sx : sy;
+            const snapped = snapScale(s);
+            nBw = Math.max(MIN, ow * snapped);
+            nBh = Math.max(MIN, oh * snapped);
+            switch (anchorId) {
+                case 'tl': nBx = fx - nBw; nBy = fy - nBh; break;
+                case 'tr': nBx = ox;       nBy = fy - nBh; break;
+                case 'bl': nBx = fx - nBw; nBy = oy;       break;
+                case 'br': nBx = ox;       nBy = oy;       break;
+            }
+        } else if (anchorId === 'tm' || anchorId === 'bm') {
+            // Vertical edge — mirror width around center, preserving aspect
+            nBw = Math.max(MIN, nBh * aspect);
+            nBx = cx - nBw / 2;
+        } else {
+            // Horizontal edge
+            nBh = Math.max(MIN, nBw / aspect);
+            nBy = cy - nBh / 2;
+        }
+    }
+
+    // ── Alt/Option: scale anchored at the original center ─────────────────
+    if (alt) {
+        const halfW = Math.max(MIN / 2, Math.abs(nx - cx));
+        const halfH = Math.max(MIN / 2, Math.abs(ny - cy));
+        if (isCorner) {
+            if (shift) {
+                // Aspect-locked + centered: use whichever half-extent drives the scale
+                const sx = halfW / (ow / 2), sy = halfH / (oh / 2);
+                const s = snapScale(Math.max(sx, sy));
+                nBw = ow * s; nBh = oh * s;
+            } else {
+                nBw = halfW * 2; nBh = halfH * 2;
+            }
+            nBx = cx - nBw / 2; nBy = cy - nBh / 2;
+        } else if (anchorId === 'tm' || anchorId === 'bm') {
+            nBh = halfH * 2; nBy = cy - nBh / 2;
+            if (shift) { nBw = nBh * aspect; nBx = cx - nBw / 2; }
+        } else {
+            nBw = halfW * 2; nBx = cx - nBw / 2;
+            if (shift) { nBh = nBw / aspect; nBy = cy - nBh / 2; }
+        }
+    }
+
+    return { nBx, nBy, nBw, nBh };
+}
+
+// Soft snap around 0.5, 1, 1.5, 2 scale milestones for a "sticky" Figma-like feel.
+function snapScale(s) {
+    const tol = 0.025; // 2.5% window
+    for (const m of [0.25, 0.5, 0.75, 1, 1.25, 1.5, 2, 3]) {
+        if (Math.abs(s - m) < tol) return m;
+    }
+    return s;
+}
+
 // Apply anchor drag — direct vertex manipulation for path types, bbox-scale for resize types.
 function applyAnchor(obj, anchorId, nx, ny) {
     const { origBounds: ob, origData: od, ptIdx } = S.anchorDrag;
@@ -2794,24 +3208,13 @@ function applyAnchor(obj, anchorId, nx, ny) {
             if (anchorId === 'left' ) { obj.data.rx = Math.max(2, od.cx - nx); break; }
             // Bbox scale — recompute cx/cy/rx/ry from the new bounding box
             if (!ob) break;
-            const { x: ox, y: oy, w: ow, h: oh } = ob;
-            const MIN = 4, fx = ox + ow, fy = oy + oh;
-            let nBx, nBy, nBw, nBh;
-            switch (anchorId) {
-                case 'tl': nBw=Math.max(MIN,fx-nx); nBh=Math.max(MIN,fy-ny); nBx=fx-nBw; nBy=fy-nBh; break;
-                case 'tm': nBx=ox; nBw=ow;          nBh=Math.max(MIN,fy-ny); nBy=fy-nBh; break;
-                case 'tr': nBx=ox; nBw=Math.max(MIN,nx-ox); nBh=Math.max(MIN,fy-ny); nBy=fy-nBh; break;
-                case 'rm': nBx=ox; nBy=oy; nBw=Math.max(MIN,nx-ox); nBh=oh; break;
-                case 'br': nBx=ox; nBy=oy; nBw=Math.max(MIN,nx-ox); nBh=Math.max(MIN,ny-oy); break;
-                case 'bm': nBx=ox; nBy=oy; nBw=ow; nBh=Math.max(MIN,ny-oy); break;
-                case 'bl': nBw=Math.max(MIN,fx-nx); nBx=fx-nBw; nBy=oy; nBh=Math.max(MIN,ny-oy); break;
-                case 'lm': nBw=Math.max(MIN,fx-nx); nBx=fx-nBw; nBy=oy; nBh=oh; break;
-                default: return;
-            }
-            obj.data.cx = nBx + nBw/2;
-            obj.data.cy = nBy + nBh/2;
-            obj.data.rx = Math.max(2, nBw/2);
-            obj.data.ry = Math.max(2, nBh/2);
+            const mods = S.modifiers || { shift:false, alt:false };
+            const r1 = resizeBoxWithMods(anchorId, ob, nx, ny, mods.shift, mods.alt);
+            if (!r1) return;
+            obj.data.cx = r1.nBx + r1.nBw/2;
+            obj.data.cy = r1.nBy + r1.nBh/2;
+            obj.data.rx = Math.max(2, r1.nBw/2);
+            obj.data.ry = Math.max(2, r1.nBh/2);
             break;
         }
 
@@ -2830,20 +3233,11 @@ function applyAnchor(obj, anchorId, nx, ny) {
             }
             // Bbox scale — scale all 3 vertices proportionally
             if (!ob || !od.pts) break;
+            const mods2 = S.modifiers || { shift:false, alt:false };
+            const r2 = resizeBoxWithMods(anchorId, ob, nx, ny, mods2.shift, mods2.alt);
+            if (!r2) return;
+            const { nBx, nBy, nBw, nBh } = r2;
             const { x: ox, y: oy, w: ow, h: oh } = ob;
-            const MIN = 4, fx = ox + ow, fy = oy + oh;
-            let nBx, nBy, nBw, nBh;
-            switch (anchorId) {
-                case 'tl': nBw=Math.max(MIN,fx-nx); nBh=Math.max(MIN,fy-ny); nBx=fx-nBw; nBy=fy-nBh; break;
-                case 'tm': nBx=ox; nBw=ow;          nBh=Math.max(MIN,fy-ny); nBy=fy-nBh; break;
-                case 'tr': nBx=ox; nBw=Math.max(MIN,nx-ox); nBh=Math.max(MIN,fy-ny); nBy=fy-nBh; break;
-                case 'rm': nBx=ox; nBy=oy; nBw=Math.max(MIN,nx-ox); nBh=oh; break;
-                case 'br': nBx=ox; nBy=oy; nBw=Math.max(MIN,nx-ox); nBh=Math.max(MIN,ny-oy); break;
-                case 'bm': nBx=ox; nBy=oy; nBw=ow; nBh=Math.max(MIN,ny-oy); break;
-                case 'bl': nBw=Math.max(MIN,fx-nx); nBx=fx-nBw; nBy=oy; nBh=Math.max(MIN,ny-oy); break;
-                case 'lm': nBw=Math.max(MIN,fx-nx); nBx=fx-nBw; nBy=oy; nBh=oh; break;
-                default: return;
-            }
             const sx = nBw / (ow || 1), sy = nBh / (oh || 1);
             obj.data.pts = od.pts.map(p => ({
                 x: nBx + (p.x - ox) * sx,
@@ -2854,24 +3248,18 @@ function applyAnchor(obj, anchorId, nx, ny) {
         }
 
         // ── Square / Image: 8-handle proportional bbox resize ───────────────
+        // Images default to aspect-locked on corners so photos never warp.
         case 'square':
         case 'image': {
             if (!ob) break;
-            const { x: ox, y: oy, w: ow, h: oh } = ob;
-            const MIN = 8, fx = ox + ow, fy = oy + oh;
-            let nBx, nBy, nBw, nBh;
-            switch (anchorId) {
-                case 'tl': nBw=Math.max(MIN,fx-nx); nBh=Math.max(MIN,fy-ny); nBx=fx-nBw; nBy=fy-nBh; break;
-                case 'tm': nBx=ox; nBw=ow;          nBh=Math.max(MIN,fy-ny); nBy=fy-nBh; break;
-                case 'tr': nBx=ox; nBw=Math.max(MIN,nx-ox); nBh=Math.max(MIN,fy-ny); nBy=fy-nBh; break;
-                case 'rm': nBx=ox; nBy=oy; nBw=Math.max(MIN,nx-ox); nBh=oh; break;
-                case 'br': nBx=ox; nBy=oy; nBw=Math.max(MIN,nx-ox); nBh=Math.max(MIN,ny-oy); break;
-                case 'bm': nBx=ox; nBy=oy; nBw=ow; nBh=Math.max(MIN,ny-oy); break;
-                case 'bl': nBw=Math.max(MIN,fx-nx); nBx=fx-nBw; nBy=oy; nBh=Math.max(MIN,ny-oy); break;
-                case 'lm': nBw=Math.max(MIN,fx-nx); nBx=fx-nBw; nBy=oy; nBh=oh; break;
-                default: return;
-            }
-            obj.data.x = nBx; obj.data.y = nBy; obj.data.w = nBw; obj.data.h = nBh;
+            const mods3 = S.modifiers || { shift:false, alt:false };
+            const isCorner = anchorId==='tl'||anchorId==='tr'||anchorId==='bl'||anchorId==='br';
+            // Images: aspect lock by DEFAULT on corner handles — Shift escapes it.
+            const lockAspect = obj.type === 'image' ? (isCorner ? !mods3.shift : mods3.shift)
+                                                    : mods3.shift;
+            const r3 = resizeBoxWithMods(anchorId, ob, nx, ny, lockAspect, mods3.alt);
+            if (!r3) return;
+            obj.data.x = r3.nBx; obj.data.y = r3.nBy; obj.data.w = r3.nBw; obj.data.h = r3.nBh;
             break;
         }
 
@@ -2881,43 +3269,26 @@ function applyAnchor(obj, anchorId, nx, ny) {
             if (anchorId === 'end'  ) { obj.data.x2 = nx; obj.data.y2 = ny; break; }
             // Bbox scale — scale both endpoints proportionally
             if (!ob) break;
-            const { x: ox, y: oy, w: ow, h: oh } = ob;
-            const MIN = 4, fx = ox + ow, fy = oy + oh;
-            let nBx, nBy, nBw, nBh;
-            switch (anchorId) {
-                case 'tl': nBw=Math.max(MIN,fx-nx); nBh=Math.max(MIN,fy-ny); nBx=fx-nBw; nBy=fy-nBh; break;
-                case 'tm': nBx=ox; nBw=ow;          nBh=Math.max(MIN,fy-ny); nBy=fy-nBh; break;
-                case 'tr': nBx=ox; nBw=Math.max(MIN,nx-ox); nBh=Math.max(MIN,fy-ny); nBy=fy-nBh; break;
-                case 'rm': nBx=ox; nBy=oy; nBw=Math.max(MIN,nx-ox); nBh=oh; break;
-                case 'br': nBx=ox; nBy=oy; nBw=Math.max(MIN,nx-ox); nBh=Math.max(MIN,ny-oy); break;
-                case 'bm': nBx=ox; nBy=oy; nBw=ow; nBh=Math.max(MIN,ny-oy); break;
-                case 'bl': nBw=Math.max(MIN,fx-nx); nBx=fx-nBw; nBy=oy; nBh=Math.max(MIN,ny-oy); break;
-                case 'lm': nBw=Math.max(MIN,fx-nx); nBx=fx-nBw; nBy=oy; nBh=oh; break;
-                default: return;
-            }
-            const sx = nBw / (ow || 1), sy = nBh / (oh || 1);
-            obj.data.x1 = nBx + (od.x1 - ox) * sx;
-            obj.data.y1 = nBy + (od.y1 - oy) * sy;
-            obj.data.x2 = nBx + (od.x2 - ox) * sx;
-            obj.data.y2 = nBy + (od.y2 - oy) * sy;
+            const mods4 = S.modifiers || { shift:false, alt:false };
+            const r4 = resizeBoxWithMods(anchorId, ob, nx, ny, mods4.shift, mods4.alt);
+            if (!r4) return;
+            const { nBx: aBx, nBy: aBy, nBw: aBw, nBh: aBh } = r4;
+            const { x: aox, y: aoy, w: aow, h: aoh } = ob;
+            const asx = aBw / (aow || 1), asy = aBh / (aoh || 1);
+            obj.data.x1 = aBx + (od.x1 - aox) * asx;
+            obj.data.y1 = aBy + (od.y1 - aoy) * asy;
+            obj.data.x2 = aBx + (od.x2 - aox) * asx;
+            obj.data.y2 = aBy + (od.y2 - aoy) * asy;
             break;
         }
 
         // ── Text: bbox resize → scale font size ─────────────────────────────
         case 'text': {
             if (!ob) break;
-            const { x: ox, y: oy, w: ow, h: oh } = ob;
-            const MIN = 8, fx = ox + ow, fy = oy + oh;
-            let nBx, nBy, nBw, nBh;
-            switch (anchorId) {
-                case 'tl': nBw=Math.max(MIN,fx-nx); nBh=Math.max(MIN,fy-ny); nBx=fx-nBw; nBy=fy-nBh; break;
-                case 'tm': nBx=ox; nBw=ow;          nBh=Math.max(MIN,fy-ny); nBy=fy-nBh; break;
-                case 'tr': nBx=ox; nBw=Math.max(MIN,nx-ox); nBh=Math.max(MIN,fy-ny); nBy=fy-nBh; break;
-                case 'br': nBx=ox; nBy=oy; nBw=Math.max(MIN,nx-ox); nBh=Math.max(MIN,ny-oy); break;
-                case 'bm': nBx=ox; nBy=oy; nBw=ow; nBh=Math.max(MIN,ny-oy); break;
-                case 'bl': nBw=Math.max(MIN,fx-nx); nBx=fx-nBw; nBy=oy; nBh=Math.max(MIN,ny-oy); break;
-                default: return;
-            }
+            const mods5 = S.modifiers || { shift:false, alt:false };
+            const rt = resizeBoxWithMods(anchorId, ob, nx, ny, mods5.shift, mods5.alt);
+            if (!rt) return;
+            const { nBx, nBy, nBw, nBh } = rt;
             const fsH = nBh / 1.3;
             const fsW = nBw / ((od.text.length || 1) * 0.6);
             let newFs = (anchorId==='tm'||anchorId==='bm') ? fsH
@@ -2939,24 +3310,15 @@ function applyAnchor(obj, anchorId, nx, ny) {
             }
             // Bbox resize — scale all stored pts proportionally around the fixed corner
             if (!ob || !od || !od.pts) break;
-            const { x: ox, y: oy, w: ow, h: oh } = ob;
-            const MIN = 4, fx = ox + ow, fy = oy + oh;
-            let nBx, nBy, nBw, nBh;
-            switch (anchorId) {
-                case 'tl': nBw=Math.max(MIN,fx-nx); nBh=Math.max(MIN,fy-ny); nBx=fx-nBw; nBy=fy-nBh; break;
-                case 'tm': nBx=ox; nBw=ow;          nBh=Math.max(MIN,fy-ny); nBy=fy-nBh; break;
-                case 'tr': nBx=ox; nBw=Math.max(MIN,nx-ox); nBh=Math.max(MIN,fy-ny); nBy=fy-nBh; break;
-                case 'rm': nBx=ox; nBy=oy; nBw=Math.max(MIN,nx-ox); nBh=oh; break;
-                case 'br': nBx=ox; nBy=oy; nBw=Math.max(MIN,nx-ox); nBh=Math.max(MIN,ny-oy); break;
-                case 'bm': nBx=ox; nBy=oy; nBw=ow; nBh=Math.max(MIN,ny-oy); break;
-                case 'bl': nBw=Math.max(MIN,fx-nx); nBx=fx-nBw; nBy=oy; nBh=Math.max(MIN,ny-oy); break;
-                case 'lm': nBw=Math.max(MIN,fx-nx); nBx=fx-nBw; nBy=oy; nBh=oh; break;
-                default: return;
-            }
-            const sx = nBw / (ow || 1), sy = nBh / (oh || 1);
+            const mods6 = S.modifiers || { shift:false, alt:false };
+            const rs = resizeBoxWithMods(anchorId, ob, nx, ny, mods6.shift, mods6.alt);
+            if (!rs) return;
+            const { nBx: sBx, nBy: sBy, nBw: sBw, nBh: sBh } = rs;
+            const { x: sox, y: soy, w: sow, h: soh } = ob;
+            const ssx = sBw / (sow || 1), ssy = sBh / (soh || 1);
             obj.data.pts = od.pts.map(pt => ({
-                x: nBx + (pt.x - ox) * sx,
-                y: nBy + (pt.y - oy) * sy,
+                x: sBx + (pt.x - sox) * ssx,
+                y: sBy + (pt.y - soy) * ssy,
             }));
             break;
         }
@@ -3483,7 +3845,7 @@ document.getElementById('ti').addEventListener('keydown', e => {
     } else if (low==='clear'||low==='flush') {
         flushTerm();
     } else if (low==='dark'||low==='dark mode') {
-        if (DARK_MODE) {
+        if (MODE === 'dark') {
             printRaw('[SYSTEM] already in dark mode — void already embraced.', 't-dim');
         } else {
             enqueue('[SYSTEM] Switching to DARK MODE...', [
@@ -3492,10 +3854,10 @@ document.getElementById('ti').addEventListener('keydown', e => {
                 '[SYSTEM] grid: deep slate  mode: void',
                 '[SYSTEM] Environment initialized.',
             ], 't-dim');
-            setTimeout(() => setDarkMode(true), 220);
+            setTimeout(() => setMode('dark'), 220);
         }
     } else if (low==='light'||low==='light mode') {
-        if (!DARK_MODE) {
+        if (MODE === 'light') {
             printRaw('[SYSTEM] already in light mode — surface is clean.', 't-dim');
         } else {
             enqueue('[SYSTEM] Switching to LIGHT MODE...', [
@@ -3504,7 +3866,19 @@ document.getElementById('ti').addEventListener('keydown', e => {
                 '[SYSTEM] grid: warm grey  mode: surface',
                 '[SYSTEM] Environment initialized.',
             ], 't-dim');
-            setTimeout(() => setDarkMode(false), 220);
+            setTimeout(() => setMode('light'), 220);
+        }
+    } else if (low==='gray'||low==='grey'||low==='gray mode'||low==='grey mode') {
+        if (MODE === 'gray') {
+            printRaw('[SYSTEM] already in gray mode — studio is live.', 't-dim');
+        } else {
+            enqueue('[SYSTEM] Initializing Studio Environment... GRAY_MODE enabled.', [
+                '[SYSTEM] loading pebble ground...',
+                '[SYSTEM] canvas: #DCDBD5  accent: #1600A2',
+                '[SYSTEM] grid: soft cobalt  mode: studio',
+                '[SYSTEM] Environment initialized.',
+            ], 't-dim');
+            setTimeout(() => setMode('gray'), 220);
         }
     } else if (low==='help') {
         enqueue('help', ['draw shapes on canvas:',
@@ -3514,6 +3888,7 @@ document.getElementById('ti').addEventListener('keydown', e => {
             '', 'hidden commands:',
             '  dark / dark mode   — embrace the void',
             '  light / light mode — return to surface',
+            '  gray / gray mode   — enter the studio (cobalt on pebble)',
             '  youtube            — a surprise awaits']);
     } else {
         enqueue(val, [`${val.split(' ')[0]}: command not found`]);
@@ -3568,6 +3943,7 @@ function setTool(tool) {
         if (tool !== 'path') commitPath(false);
     }
     S.pathHover = null; S.pathSnapClose = false; S.pathDrag = null;
+    S.hoveredId = null; S.lastAnchorPt = null; document.body.style.cursor = '';
     S.tool = tool;
     // Update [data-tool] active states (excludes #shapeBtn which has no data-tool)
     document.querySelectorAll('[data-tool]').forEach(b => b.classList.toggle('active', b.dataset.tool===tool));
@@ -3775,17 +4151,25 @@ function openFillPopover() {
 }
 
 const FILL_INDICATOR = {
-    none:  { fill: 'none',            stroke: 'currentColor', sw: '1.5' },
-    black: { fill: '#111',            stroke: '#111',          sw: '1'   },
-    grey:  { fill: 'rgba(0,0,0,0.3)', stroke: '#888',         sw: '1'   },
-    white: { fill: '#FAFAF8',         stroke: '#aaa',          sw: '1'   },
+    none:  { cls: '',         sw: '1.5', useAttr: { fill: 'none', stroke: 'currentColor' } },
+    black: { cls: 'sw-black', sw: '1',   useAttr: null },
+    grey:  { cls: 'sw-grey',  sw: '1',   useAttr: null },
+    white: { cls: 'sw-white', sw: '1',   useAttr: null },
 };
 
 function setFill(fillId) {
     S.fillMode = fillId;
     const ind = FILL_INDICATOR[fillId];
-    fillIndRect.setAttribute('fill',         ind.fill);
-    fillIndRect.setAttribute('stroke',       ind.stroke);
+    // Clear any previous swatch class then apply the new one
+    fillIndRect.classList.remove('sw-black', 'sw-grey', 'sw-white');
+    if (ind.cls) fillIndRect.classList.add(ind.cls);
+    if (ind.useAttr) {
+        fillIndRect.setAttribute('fill',   ind.useAttr.fill);
+        fillIndRect.setAttribute('stroke', ind.useAttr.stroke);
+    } else {
+        fillIndRect.removeAttribute('fill');
+        fillIndRect.removeAttribute('stroke');
+    }
     fillIndRect.setAttribute('stroke-width', ind.sw);
     const sel = S.objects.find(o => o.selected);
     // Allow fill on closed strokes; block on open strokes, arrows, text
@@ -3863,6 +4247,38 @@ document.querySelectorAll('.tool-btn[data-tool]').forEach(btn => {
     if (btn.id === 'penBtn') return;
     btn.addEventListener('click', () => { playClick(false); setTool(btn.dataset.tool); });
 });
+
+// Track Shift / Alt modifier state globally — read live during anchor drag + multi-resize.
+// Fires regardless of focus target so resize constraints work even while typing is possible elsewhere;
+// we only skip the preventDefault branches when focus is in a text input.
+window.addEventListener('keydown', e => {
+    if (e.key === 'Shift') S.modifiers.shift = true;
+    if (e.key === 'Alt' || e.key === 'AltGraph' || e.key === 'Meta') S.modifiers.alt = true;
+    // If a drag or resize is in progress, redraw so the constraint visibly kicks in mid-gesture.
+    if ((S.anchorDrag || S.multiResizeId) && (e.key === 'Shift' || e.key === 'Alt')) {
+        // Re-apply last move so the modifier effect is immediate (mouse may be idle)
+        if (S.anchorDrag && S.lastAnchorPt) {
+            const obj = S.objects.find(o => o.id === S.anchorDrag.objId);
+            if (obj) applyAnchor(obj, S.anchorDrag.anchorId, S.lastAnchorPt.x, S.lastAnchorPt.y);
+        }
+        redrawAll();
+        // Block browser shortcut on modifier-only taps over canvas (Alt menu focus etc.)
+        if (e.target === document.body || e.target.tagName === 'CANVAS') e.preventDefault();
+    }
+}, { passive: false });
+window.addEventListener('keyup', e => {
+    if (e.key === 'Shift') S.modifiers.shift = false;
+    if (e.key === 'Alt' || e.key === 'AltGraph' || e.key === 'Meta') S.modifiers.alt = false;
+    if ((S.anchorDrag || S.multiResizeId) && (e.key === 'Shift' || e.key === 'Alt')) {
+        if (S.anchorDrag && S.lastAnchorPt) {
+            const obj = S.objects.find(o => o.id === S.anchorDrag.objId);
+            if (obj) applyAnchor(obj, S.anchorDrag.anchorId, S.lastAnchorPt.x, S.lastAnchorPt.y);
+        }
+        redrawAll();
+    }
+});
+// Blur wipes stale modifier state so "stuck Shift" never happens after tab switches.
+window.addEventListener('blur', () => { S.modifiers.shift = false; S.modifiers.alt = false; });
 
 document.addEventListener('keydown', e => {
     if (e.target.tagName==='INPUT') return;
@@ -4011,7 +4427,7 @@ function exportProject() {
         html: el.innerHTML,
     }));
     const payload = {
-        version:   '0.9.0',
+        version:   '1.0.0',
         app:       'blackmirror',
         timestamp: new Date().toISOString(),
         view:      { scale:VIEW.scale, tx:VIEW.tx, ty:VIEW.ty },
@@ -4088,28 +4504,37 @@ function clearCanvas() {
 // ══════════════════════════════════════════════════
 
 function boot() {
-    enqueue('blackmirror --init --version 0.9.5', [
+    enqueue('blackmirror --init --version 1.0.0 --build 2026-04-16', [
         '99letters studio — all rights reserved',
+        'BLACK MIRROR BOARD v1.0  ( release: 2026-04-16 )',
         '',
         'loading kernel...',
         '  canvas engine      ✓ ready',
-        '  pointer unifier    ✓ mouse + touch',
+        '  pointer unifier    ✓ mouse + touch + pen',
         '  pan engine         ✓ space / 2-finger',
         '  object model       ✓ active',
         '  rotation engine    ✓ ready',
-        '  anchor system      ✓ ready',
-        '  fill engine        ✓ ready',
+        '  anchor system      ✓ 8-handle bbox + vertex',
+        '  hit-test           ✓ segment-aware + 8px pad',
+        '  resize engine      ✓ shift lock · alt center · snap',
+        '  fill engine        ✓ light · dark · gray',
         '  pen auto-close     ✓ snap ring active',
         '  shape detector     ✓ listening',
-        '  dark mode engine   ✓ standby',
+        '  theme engine       ✓ light / dark / gray online',
         '  zoom engine        ✓ ready',
         '  audio engine       ✓ standby',
         '  syntax highlighter ✓ loaded',
-        '  export / import    ✓ JSON + PNG ready',
+        '  export / import    ✓ JSON + PNG (alpha) ready',
         '  terminal daemon    ✓ running',
         '',
+        'v1.0 ship manifest:',
+        '  · gray mode     — pebble ground (#DCDBD5) / cobalt ink (#1600A2)',
+        '  · hit-test 2.0  — grab thin strokes without pixel-hunting',
+        '  · shift resize  — aspect lock (image: on by default)',
+        '  · alpha png     — transparent export for compositing',
+        '',
         'Draw. Pan. Save. The mirror responds.',
-        'Type "dark mode" to embrace the void.',
+        'Type "dark", "light" or "gray" to switch environments.',
     ]);
 }
 
