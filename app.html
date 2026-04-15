@@ -769,6 +769,17 @@
         <button class="tool-btn" data-tool="text" title="Text (T)">T</button>
         <div class="tool-sep"></div>
 
+        <!-- Upload Image -->
+        <label class="tool-btn" id="uploadImgBtn" title="Upload image (I)" style="cursor:pointer">
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="1" y="3.5" width="12" height="9" rx="1"/>
+                <circle cx="4.5" cy="7.5" r="1.5"/>
+                <polyline points="1,11.5 4.5,8 7,10.5 9.5,8 13,11.5"/>
+            </svg>
+            <input type="file" id="imgFileInput" accept="image/*" style="display:none">
+        </label>
+        <div class="tool-sep"></div>
+
         <!-- Export PNG -->
         <button class="tool-btn" id="exportPngBtn" title="Export PNG (X)">
             <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
@@ -889,6 +900,19 @@
             <svg width="12" height="12" viewBox="0 0 12 12"><rect x="1" y="1" width="10" height="10" fill="#FAFAF8" stroke="#aaa" stroke-width="1.5"/></svg>
         </button>
     </div>
+    <div class="pop-sep-line"></div>
+    <span class="pop-label">LINE</span>
+    <div class="pop-row">
+        <button class="tool-btn stroke-btn active" data-stroke="on" title="Stroke on (outline)">
+            <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="1" y="1" width="10" height="10"/></svg>
+        </button>
+        <button class="tool-btn stroke-btn" data-stroke="off" title="No stroke (remove outline)">
+            <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                <rect x="1" y="1" width="10" height="10" stroke="#bbb" stroke-width="1.5"/>
+                <line x1="2" y1="10" x2="10" y2="2" stroke="#e03" stroke-width="2" stroke-linecap="round"/>
+            </svg>
+        </button>
+    </div>
 </div>
 
 <!-- Fill Popover — (toolbar fill button popup, position:fixed, never clipped) -->
@@ -906,6 +930,19 @@
         </button>
         <button class="tool-btn" data-fill="white" title="Fill white">
             <svg width="12" height="12" viewBox="0 0 12 12"><rect x="1" y="1" width="10" height="10" fill="#FAFAF8" stroke="#aaa" stroke-width="1.5"/></svg>
+        </button>
+    </div>
+    <div class="pop-sep-line"></div>
+    <span class="pop-label">LINE</span>
+    <div class="pop-row">
+        <button class="tool-btn stroke-btn active" data-stroke="on" title="Stroke on (outline)">
+            <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="1" y="1" width="10" height="10"/></svg>
+        </button>
+        <button class="tool-btn stroke-btn" data-stroke="off" title="No stroke (remove outline)">
+            <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                <rect x="1" y="1" width="10" height="10" stroke="#bbb" stroke-width="1.5"/>
+                <line x1="2" y1="10" x2="10" y2="2" stroke="#e03" stroke-width="2" stroke-linecap="round"/>
+            </svg>
         </button>
     </div>
 </div>
@@ -979,6 +1016,7 @@ const S = {
     tool:            'select',
     lineWidth:       1.5,
     fillMode:        'none',    // 'none' | 'black' | 'grey' | 'white'
+    strokeOff:       false,     // true = no outline on shapes
     objects:         [],
     selectedId:      null,
     isDown:          false,
@@ -1008,6 +1046,7 @@ const S = {
     multiResizeOrig: null,      // { groupBounds, objDataMap:{id->deepCopy} } at resize start
     editingTextId:   null,      // id of text object being re-edited, or null (new text)
     lastTapInfo:     null,      // {id, time} for double-tap detection
+    penSnapClose:    false,     // true when pen tip is near the start point (auto-close ready)
 };
 
 const VIEW = { scale: 1, tx: 0, ty: 0 };
@@ -1237,6 +1276,8 @@ function getObjCenter(obj) {
             const bb = strokeBBox(obj.data.pts);
             return { x: bb.x + bb.w/2, y: bb.y + bb.h/2 };
         }
+        case 'image':
+            return { x: obj.data.x + obj.data.w/2, y: obj.data.y + obj.data.h/2 };
     }
 }
 
@@ -1264,6 +1305,7 @@ function getObjBounds(obj) {
             return { x: obj.data.x, y: obj.data.y - fs, w: Math.max(tw, 16), h: fs * 1.3 };
         }
         case 'stroke': return strokeBBox(obj.data.pts);
+        case 'image':  return { x: obj.data.x, y: obj.data.y, w: obj.data.w, h: obj.data.h };
     }
 }
 
@@ -1377,6 +1419,7 @@ function onDown(cx, cy, isTouch = false) {
             hit.selected = true;
             S.selectedId = hit.id;
             S.dragOff    = { x: p.x, y: p.y };
+            syncStrokeBtnToObj(hit);
             redrawAll();
             return;
         }
@@ -1506,6 +1549,28 @@ function onMove(cx, cy) {
         const dpr = window.devicePixelRatio || 1;
         const pts = S.penPts;
         const prev = pts[pts.length - 2], cur = pts[pts.length - 1];
+
+        // ── Snap-to-close detection ──────────────────────────────────────
+        // Need at least ~10 points before snap is valid (avoid instant close)
+        const snapPx  = S.lastPointerType === 'touch' ? 32 : 22; // screen px
+        const snapDist = snapPx / VIEW.scale; // world coords
+        const first = pts[0];
+        const dx = cur.x - first.x, dy = cur.y - first.y;
+        const wasSnap = S.penSnapClose;
+        S.penSnapClose = pts.length > 12 && Math.sqrt(dx*dx + dy*dy) < snapDist;
+
+        // Full redraw only when snap state changes (keeps incremental perf otherwise)
+        if (S.penSnapClose !== wasSnap) {
+            redrawAll();
+            return;
+        }
+        if (S.penSnapClose) {
+            // Already in snap zone — just redraw to keep indicator visible
+            redrawAll();
+            return;
+        }
+
+        // ── Incremental draw (normal) ────────────────────────────────────
         ctx.save();
         ctx.setTransform(VIEW.scale*dpr, 0, 0, VIEW.scale*dpr, VIEW.tx*dpr, VIEW.ty*dpr);
         ctx.strokeStyle = '#0c0c0c'; ctx.lineWidth = S.lineWidth;
@@ -1558,11 +1623,19 @@ function onUp() {
     if (S.tool === 'pen') {
         if (S.penPts.length > 4) {
             const id  = genId();
-            const obj = { id, type: 'stroke', data: { pts: [...S.penPts], lw: S.lineWidth, rotation: 0, fill: null }, selected: false };
+            // Auto-close: snap the last point to the first when within range
+            const closed = S.penSnapClose;
+            const pts = closed
+                ? [...S.penPts.slice(0, -1), { ...S.penPts[0] }]  // replace tail with exact start
+                : [...S.penPts];
+            const obj = { id, type: 'stroke', data: { pts, lw: S.lineWidth, rotation: 0, fill: null, closed }, selected: false };
             S.objects.push(obj);
-            clearTimeout(detectTimer);
-            detectTimer = setTimeout(() => runFreeDetect(obj), 400);
+            if (!closed) {
+                clearTimeout(detectTimer);
+                detectTimer = setTimeout(() => runFreeDetect(obj), 400);
+            }
         }
+        S.penSnapClose = false;
         S.penPts = []; saveHistory(); redrawAll();
     } else if (isShapeTool(S.tool) && S.startPt) {
         finalizeShape();
@@ -1583,6 +1656,8 @@ function redrawAll() {
     ctx.setTransform(VIEW.scale*dpr, 0, 0, VIEW.scale*dpr, VIEW.tx*dpr, VIEW.ty*dpr);
     for (const obj of S.objects) renderObject(obj);
     if (S.isDown && isShapeTool(S.tool) && S.startPt && S.curPt) renderPreview();
+    // Pen stroke in-progress (snap state changes trigger full redraw)
+    if (S.tool === 'pen' && S.penPts.length > 1) renderPenInProgress();
 
     // Marquee selection rectangle
     if (S.marquee) {
@@ -1619,6 +1694,7 @@ function renderObject(obj) {
         case 'arrow':    renderArrow(obj);    break;
         case 'text':     renderText(obj);     break;
         case 'stroke':   renderStroke(obj);   break;
+        case 'image':    renderImage(obj);    break;
     }
     ctx.restore();
 }
@@ -1633,7 +1709,7 @@ function renderCircle(obj) {
     ctx.save(); baseStyle();
     ctx.beginPath(); ctx.ellipse(cx, cy, Math.max(rx,1), Math.max(ry,1), 0, 0, 2*Math.PI);
     if (obj.data.fill) { ctx.fillStyle = obj.data.fill; ctx.fill(); }
-    ctx.stroke();
+    if (!obj.data.strokeOff) ctx.stroke();
     if (obj.selected) { selBox(cx-rx, cy-ry, 2*rx, 2*ry); drawAnchors(obj); }
     ctx.restore();
 }
@@ -1650,7 +1726,7 @@ function renderTriangle(obj) {
     }
     ctx.closePath();
     if (obj.data.fill) { ctx.fillStyle = obj.data.fill; ctx.fill(); }
-    ctx.stroke();
+    if (!obj.data.strokeOff) ctx.stroke();
     if (obj.selected) {
         const b = getObjBounds(obj);
         selBox(b.x, b.y, b.w, b.h);
@@ -1663,7 +1739,7 @@ function renderSquare(obj) {
     const {x, y, w, h} = obj.data;
     ctx.save(); baseStyle();
     if (obj.data.fill) { ctx.fillStyle = obj.data.fill; ctx.fillRect(x, y, w, h); }
-    ctx.strokeRect(x, y, w, h);
+    if (!obj.data.strokeOff) ctx.strokeRect(x, y, w, h);
     if (obj.selected) { selBox(x, y, w, h); drawAnchors(obj); }
     ctx.restore();
 }
@@ -1672,11 +1748,13 @@ function renderArrow(obj) {
     const {x1, y1, x2, y2} = obj.data;
     const ang = Math.atan2(y2-y1, x2-x1), hl = 13;
     ctx.save(); baseStyle();
-    ctx.beginPath();
-    ctx.moveTo(x1,y1); ctx.lineTo(x2,y2);
-    ctx.moveTo(x2,y2); ctx.lineTo(x2-hl*Math.cos(ang-Math.PI/6), y2-hl*Math.sin(ang-Math.PI/6));
-    ctx.moveTo(x2,y2); ctx.lineTo(x2-hl*Math.cos(ang+Math.PI/6), y2-hl*Math.sin(ang+Math.PI/6));
-    ctx.stroke();
+    if (!obj.data.strokeOff) {
+        ctx.beginPath();
+        ctx.moveTo(x1,y1); ctx.lineTo(x2,y2);
+        ctx.moveTo(x2,y2); ctx.lineTo(x2-hl*Math.cos(ang-Math.PI/6), y2-hl*Math.sin(ang-Math.PI/6));
+        ctx.moveTo(x2,y2); ctx.lineTo(x2-hl*Math.cos(ang+Math.PI/6), y2-hl*Math.sin(ang+Math.PI/6));
+        ctx.stroke();
+    }
     if (obj.selected) { selBox(Math.min(x1,x2), Math.min(y1,y2), Math.abs(x2-x1), Math.abs(y2-y1)); drawAnchors(obj); }
     ctx.restore();
 }
@@ -1698,7 +1776,7 @@ function renderText(obj) {
 }
 
 function renderStroke(obj) {
-    const {pts, lw} = obj.data;
+    const { pts, lw, closed, fill, strokeOff } = obj.data;
     if (pts.length < 2) return;
     ctx.save();
     ctx.strokeStyle = '#0c0c0c'; ctx.lineWidth = lw; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
@@ -1708,9 +1786,85 @@ function renderStroke(obj) {
         const mx = (pp.x+p.x)/2, my = (pp.y+p.y)/2;
         ctx.quadraticCurveTo(pp.x, pp.y, mx, my);
     }
-    ctx.stroke();
+    if (closed) {
+        ctx.closePath();
+        if (fill && fill !== 'none') { ctx.fillStyle = fill; ctx.fill(); }
+    }
+    if (!strokeOff) ctx.stroke();
     if (obj.selected) { const bb = strokeBBox(pts); selBox(bb.x, bb.y, bb.w, bb.h); drawAnchors(obj); }
     ctx.restore();
+}
+
+// Draw the snap-to-close indicator while pen drawing is in progress
+// Image cache — avoids recreating HTMLImageElement every frame
+const _imgCache = new Map();
+function getCachedImg(src) {
+    if (_imgCache.has(src)) return _imgCache.get(src);
+    const img = new Image();
+    img.src = src;
+    img.onload = () => redrawAll(); // first-frame repaint after decode
+    _imgCache.set(src, img);
+    return img;
+}
+
+function renderImage(obj) {
+    const { x, y, w, h } = obj.data;
+    const img = getCachedImg(obj.data.src);
+    ctx.save();
+    if (img.complete && img.naturalWidth > 0) {
+        ctx.drawImage(img, x, y, w, h);
+    } else {
+        // Placeholder while loading
+        ctx.strokeStyle = '#ccc'; ctx.lineWidth = 1 / VIEW.scale;
+        ctx.strokeRect(x, y, w, h);
+        ctx.fillStyle = '#f5f5f5'; ctx.fillRect(x, y, w, h);
+        ctx.fillStyle = '#bbb'; ctx.font = `${12/VIEW.scale}px Courier New`;
+        ctx.fillText('loading…', x + 4/VIEW.scale, y + h/2);
+    }
+    if (obj.selected) { selBox(x, y, w, h); drawAnchors(obj); }
+    ctx.restore();
+}
+
+function renderPenSnapIndicator() {
+    if (!S.penSnapClose || S.penPts.length === 0) return;
+    const first = S.penPts[0];
+    const r = 10 / VIEW.scale;
+    ctx.save();
+    ctx.strokeStyle = 'rgba(30,111,224,0.85)';
+    ctx.fillStyle   = 'rgba(30,111,224,0.12)';
+    ctx.lineWidth   = 1.5 / VIEW.scale;
+    ctx.setLineDash([]);
+    ctx.beginPath(); ctx.arc(first.x, first.y, r, 0, Math.PI * 2);
+    ctx.fill(); ctx.stroke();
+    ctx.restore();
+}
+
+// Draw in-progress pen stroke (used when redrawAll is called mid-stroke)
+function renderPenInProgress() {
+    if (S.tool !== 'pen' || S.penPts.length < 2) return;
+    const pts = S.penPts;
+    ctx.save();
+    ctx.strokeStyle = '#0c0c0c'; ctx.lineWidth = S.lineWidth;
+    ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    ctx.beginPath(); ctx.moveTo(pts[0].x, pts[0].y);
+    for (let i = 1; i < pts.length; i++) {
+        const pp = pts[i-1], p = pts[i];
+        const mx = (pp.x+p.x)/2, my = (pp.y+p.y)/2;
+        ctx.quadraticCurveTo(pp.x, pp.y, mx, my);
+    }
+    ctx.stroke();
+    // Closing preview line (dashed) when snapping
+    if (S.penSnapClose) {
+        const last = pts[pts.length - 1];
+        ctx.strokeStyle = 'rgba(30,111,224,0.5)';
+        ctx.lineWidth   = S.lineWidth;
+        ctx.setLineDash([4 / VIEW.scale, 3 / VIEW.scale]);
+        ctx.beginPath(); ctx.moveTo(last.x, last.y); ctx.lineTo(pts[0].x, pts[0].y);
+        ctx.stroke();
+        ctx.setLineDash([]);
+    }
+    ctx.restore();
+    renderPenSnapIndicator();
 }
 
 function renderPreview() {
@@ -1946,6 +2100,10 @@ function hitTest(obj, x, y, extraPad = 0) {
             if (px<bb.x-20||px>bb.x+bb.w+20||py<bb.y-20||py>bb.y+bb.h+20) return false;
             return obj.data.pts.some(pt => Math.hypot(px-pt.x, py-pt.y) < 14);
         }
+        case 'image': {
+            const {x: ox, y: oy, w, h} = obj.data;
+            return px >= ox-pad && px <= ox+w+pad && py >= oy-pad && py <= oy+h+pad;
+        }
     }
     return false;
 }
@@ -1961,6 +2119,7 @@ function moveObj(obj, dx, dy) {
         case 'arrow':   obj.data.x1+=dx; obj.data.y1+=dy; obj.data.x2+=dx; obj.data.y2+=dy; break;
         case 'text':    obj.data.x+=dx;  obj.data.y+=dy;  break;
         case 'stroke':  obj.data.pts = obj.data.pts.map(p => ({x:p.x+dx,y:p.y+dy})); break;
+        case 'image':   obj.data.x += dx; obj.data.y += dy; break;
     }
 }
 
@@ -2056,6 +2215,7 @@ function applyAnchor(obj, anchorId, nx, ny) {
             }
             break;
         case 'square':
+        case 'image':
             obj.data.x = nBx; obj.data.y = nBy; obj.data.w = nBw; obj.data.h = nBh;
             break;
         case 'arrow':
@@ -2112,22 +2272,23 @@ function finalizeShape() {
     const id   = genId();
     let obj    = null;
 
-    const fill = FILL_COLORS[S.fillMode];
+    const fill      = FILL_COLORS[S.fillMode];
+    const strokeOff = S.strokeOff;
     switch (S.tool) {
         case 'circle': {
             const cx=(x1+fx2)/2, cy=(y1+fy2)/2;
-            obj = { id, type:'circle', data:{cx,cy,rx:Math.abs(fx2-x1)/2,ry:Math.abs(fy2-y1)/2,rotation:0,fill}, selected:false }; break;
+            obj = { id, type:'circle', data:{cx,cy,rx:Math.abs(fx2-x1)/2,ry:Math.abs(fy2-y1)/2,rotation:0,fill,strokeOff}, selected:false }; break;
         }
         case 'triangle': {
             const x=Math.min(x1,fx2),y=Math.min(y1,fy2);
-            obj = { id, type:'triangle', data:{x,y,w:Math.abs(fx2-x1),h:Math.abs(fy2-y1),rotation:0,fill}, selected:false }; break;
+            obj = { id, type:'triangle', data:{x,y,w:Math.abs(fx2-x1),h:Math.abs(fy2-y1),rotation:0,fill,strokeOff}, selected:false }; break;
         }
         case 'square': {
             const x=Math.min(x1,fx2),y=Math.min(y1,fy2);
-            obj = { id, type:'square', data:{x,y,w:Math.abs(fx2-x1),h:Math.abs(fy2-y1),rotation:0,fill}, selected:false }; break;
+            obj = { id, type:'square', data:{x,y,w:Math.abs(fx2-x1),h:Math.abs(fy2-y1),rotation:0,fill,strokeOff}, selected:false }; break;
         }
         case 'arrow':
-            obj = { id, type:'arrow', data:{x1,y1,x2:fx2,y2:fy2,rotation:0,fill:null}, selected:false }; break;
+            obj = { id, type:'arrow', data:{x1,y1,x2:fx2,y2:fy2,rotation:0,fill:null,strokeOff}, selected:false }; break;
     }
 
     if (obj) { S.objects.push(obj); saveHistory(); redrawAll(); triggerSpawn(S.tool, id, x1, y1); }
@@ -2581,6 +2742,7 @@ function setTool(tool) {
     S.multiDragOff = null; S.multiRotId = false;
     S.multiResizeId = null; S.multiResizeOrig = null;
     S.lastTapInfo   = null;
+    S.penSnapClose  = false;
     S.tool = tool;
     // Update [data-tool] active states (excludes #shapeBtn which has no data-tool)
     document.querySelectorAll('[data-tool]').forEach(b => b.classList.toggle('active', b.dataset.tool===tool));
@@ -2801,7 +2963,9 @@ function setFill(fillId) {
     fillIndRect.setAttribute('stroke',       ind.stroke);
     fillIndRect.setAttribute('stroke-width', ind.sw);
     const sel = S.objects.find(o => o.selected);
-    if (sel && sel.type !== 'arrow' && sel.type !== 'stroke' && sel.type !== 'text') {
+    // Allow fill on closed strokes; block on open strokes, arrows, text
+    if (sel && sel.type !== 'arrow' && sel.type !== 'text' &&
+        (sel.type !== 'stroke' || sel.data.closed)) {
         sel.data.fill = FILL_COLORS[fillId];
         saveHistory();
         redrawAll();
@@ -2820,6 +2984,47 @@ toolPopover.querySelectorAll('[data-fill]').forEach(btn => {
     btn.addEventListener('click', e => {
         e.stopPropagation(); playClick(false);
         setFill(btn.dataset.fill);
+    });
+});
+
+// ── Stroke toggle ──────────────────────────────────────────────────────────
+function setStroke(off) {
+    S.strokeOff = off;
+    // Update active state on ALL stroke-btn instances across both popovers
+    document.querySelectorAll('.stroke-btn').forEach(b => {
+        b.classList.toggle('active', (b.dataset.stroke === 'off') === off);
+    });
+    // Apply to currently selected object (shapes and closed strokes)
+    const sel = S.objects.find(o => o.selected);
+    if (sel && sel.type !== 'text') {
+        sel.data.strokeOff = off;
+        saveHistory();
+        redrawAll();
+    }
+}
+
+// Sync LINE button active state to reflect selected object's strokeOff value
+function syncStrokeBtnToObj(obj) {
+    const off = !!(obj && obj.data && obj.data.strokeOff);
+    S.strokeOff = off;
+    document.querySelectorAll('.stroke-btn').forEach(b => {
+        b.classList.toggle('active', (b.dataset.stroke === 'off') === off);
+    });
+}
+
+// Wire stroke buttons in toolPopover
+toolPopover.querySelectorAll('[data-stroke]').forEach(btn => {
+    btn.addEventListener('click', e => {
+        e.stopPropagation(); playClick(false);
+        setStroke(btn.dataset.stroke === 'off');
+    });
+});
+
+// Wire stroke buttons in shapePopover
+shapePopover.querySelectorAll('[data-stroke]').forEach(btn => {
+    btn.addEventListener('click', e => {
+        e.stopPropagation(); playClick(false);
+        setStroke(btn.dataset.stroke === 'off');
     });
 });
 
@@ -3179,7 +3384,7 @@ function renderObjectToCtx(c2, obj) {
     }
     function applyFill() {
         if (d.fill && d.fill !== 'none') c2.fill();
-        c2.stroke();
+        if (!d.strokeOff) c2.stroke();
     }
 
     switch (obj.type) {
@@ -3201,6 +3406,7 @@ function renderObjectToCtx(c2, obj) {
             applyFill(); break;
         }
         case 'arrow': {
+            if (d.strokeOff) break; // invisible arrow = nothing to draw
             const dx = d.x2 - d.x1, dy = d.y2 - d.y1;
             const len = Math.sqrt(dx*dx + dy*dy) || 1;
             const ux = dx/len, uy = dy/len;
@@ -3233,7 +3439,18 @@ function renderObjectToCtx(c2, obj) {
                 const prev = d.pts[i-1], cur = d.pts[i];
                 c2.quadraticCurveTo(prev.x, prev.y, (prev.x+cur.x)/2, (prev.y+cur.y)/2);
             }
+            if (d.closed) {
+                c2.closePath();
+                if (d.fill && d.fill !== 'none') { c2.fillStyle = d.fill; c2.fill(); }
+            }
             c2.stroke(); break;
+        }
+        case 'image': {
+            const img = getCachedImg(d.src);
+            if (img.complete && img.naturalWidth > 0) {
+                c2.drawImage(img, d.x, d.y, d.w, d.h);
+            }
+            break;
         }
     }
 }
@@ -3241,6 +3458,63 @@ function renderObjectToCtx(c2, obj) {
 document.getElementById('exportPngBtn').addEventListener('click', () => {
     playClick(false);
     exportPng();
+});
+
+// ── Image Upload ────────────────────────────────────────────────────────────
+document.getElementById('imgFileInput').addEventListener('change', e => {
+    const file = e.target.files[0];
+    if (!file) return;
+    e.target.value = ''; // reset so same file can be re-uploaded
+
+    const reader = new FileReader();
+    reader.onload = ev => {
+        const src = ev.target.result; // base64 dataURL
+
+        // Pre-load to get natural dimensions
+        const tmp = new Image();
+        tmp.onload = () => {
+            // Scale to fit within canvas view (max 480px wide/tall)
+            const MAX = 480;
+            let w = tmp.naturalWidth, h = tmp.naturalHeight;
+            if (w > MAX || h > MAX) {
+                const s = MAX / Math.max(w, h);
+                w = Math.round(w * s); h = Math.round(h * s);
+            }
+
+            // Place at center of current canvas view
+            const cx = (-VIEW.tx + CW / 2) / VIEW.scale;
+            const cy = (-VIEW.ty + CH / 2) / VIEW.scale;
+
+            const id  = genId();
+            const obj = {
+                id,
+                type: 'image',
+                data: { x: cx - w/2, y: cy - h/2, w, h, src, rotation: 0 },
+                selected: false,
+            };
+            // Deselect all, add and select the new image
+            S.objects.forEach(o => o.selected = false);
+            S.selectedId     = id;
+            obj.selected     = true;
+            S.multiSelected  = [];
+            S.objects.push(obj);
+            saveHistory();
+            redrawAll();
+
+            // Terminal feedback
+            const kb = (file.size / 1024).toFixed(1);
+            enqueue(`[IO] image upload — ${file.name}`, [
+                `→ file: ${file.name}`,
+                `→ size: ${kb} KB  dims: ${tmp.naturalWidth}×${tmp.naturalHeight}px`,
+                `→ display: ${w}×${h}px`,
+                `→ placed at canvas (${Math.round(cx)}, ${Math.round(cy)})`,
+                `[OK] image asset loaded.`,
+            ]);
+        };
+        tmp.src = src;
+        _imgCache.set(src, tmp); // prime the cache immediately
+    };
+    reader.readAsDataURL(file);
 });
 
 // ── Prevent browser zoom on UI elements (iOS Safari ignores user-scalable=no) ──

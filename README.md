@@ -43,6 +43,8 @@ The terminal moves at the speed of thought. Your hand replaces his keyboard.
 □  square      docker build / terraform plan
 →  arrow       curl | jq / grep | sort | uniq
 T  text        stdin echo / raw injection
+✎  pen         free path — close loop to fill like a shape
+🖼  image       place any photo or asset directly on the board
 ```
 
 ---
@@ -53,17 +55,35 @@ T  text        stdin echo / raw injection
 PATH EDITING     select any object → drag □ anchors to deform
                  8-point bounding box on all shapes · Illustrator feel
 
+PEN CLOSE        draw a pen path back near its start point →
+                 blue snap ring appears → release to auto-close
+                 closed paths support fill color like any shape
+
+FILL + LINE      fill: none / black / grey / white
+                 line: on / off (red-slash icon removes outline)
+                 apply before drawing or change on selected object
+
 BLACK MIRROR     every draw action fires real terminal output
 SYNC             typewriter queue · syntax highlighting · ambient daemon
 
-TRANSPARENT      ○ select objects → press X
-PNG EXPORT       → tight-cropped transparent PNG · Retina-ready · instant
+IMAGE UPLOAD     toolbar 🖼 button → pick any image file
+                 auto-scaled to fit view · move · resize · rotate
+                 exported in PNG · saved in JSON
+
+TRANSPARENT      select objects → press X
+PNG EXPORT       tight-cropped · transparent bg · Retina-ready
 
 UNDO / REDO      Ctrl+Z / Ctrl+Y · 60-state snapshot history
 
 PAN + ZOOM       Space+drag · pinch · scroll · double-tap resets
 
-PERSISTENCE      SAVE ↓ / OPEN ↑ · full JSON snapshot · no cloud · no auth
+PANEL RESIZE     drag the divider bar between canvas and terminal
+                 desktop: horizontal  mobile: vertical
+
+PERSISTENCE      SAVE ↓ / OPEN ↑ · full JSON snapshot
+                 images stored as base64 · no cloud · no auth
+
+FEEDBACK         tap the logo → modal → mail to studio
 ```
 
 ---
@@ -89,6 +109,7 @@ G          triangle
 Q          square
 A          arrow
 T          text
+I          upload image
 X          export transparent PNG
 1 2 3      line width
 Space      pan mode (hold)
@@ -103,8 +124,6 @@ Esc        deselect / cancel
 ## terminal
 
 ```sh
-# type into the terminal input to interact directly
-
 > help          show command reference
 > clear         flush terminal output
 > youtube       —
@@ -133,10 +152,14 @@ Push. Done.
 rendering     HTML5 Canvas · ctx.setTransform · devicePixelRatio
 input         Pointer Events API · setPointerCapture · Map<pointerId>
 shapes        bounding box + angle analysis · bezier smoothing
+pen close     distance-to-origin threshold · snap ring indicator
+image         FileReader → base64 · HTMLImageElement cache · drawImage
 terminal      async typewriter queue · RAF-synced · syntax highlight
 persistence   JSON.stringify(S.objects) · File API · no server
 audio         Web Audio API · oscillator · mechanical key feel
 export        OffscreenCanvas · toDataURL('image/png') · anchor link
+mobile        touch-action: manipulation · gesturestart blocked
+              vertical panel resize · fat-finger hit multiplier ×2.2
 ```
 
 ---
@@ -146,7 +169,7 @@ export        OffscreenCanvas · toDataURL('image/png') · anchor link
 ```
 black_mirror/
 ├── app.html        ← the entire engine. one file.
-├── logo.png        ← mark
+├── logo.png        ← studio mark
 ├── README.md       ← you are here
 ├── overview.html   ← team persona viewer
 ├── usage.md        ← interaction guide
@@ -162,8 +185,10 @@ black_mirror/
 ```
 feedback  →  kinoshita.studio@gmail.com
              subject: Black Mirror Feedback
+             (tap the logo in-app to open the form)
 
 instagram →  @tkinoshita99
+             instagram.com/tkinoshita99/
 ```
 
 ---
