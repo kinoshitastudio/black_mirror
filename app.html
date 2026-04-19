@@ -647,9 +647,11 @@
             border: none;
             color: var(--glow);
             font-family: inherit;
-            font-size: 12px;
+            font-size: 16px;       /* ≥16px prevents iOS auto-zoom on focus */
             outline: none;
             caret-color: var(--glow);
+            -webkit-appearance: none;
+            border-radius: 0;
         }
 
         #ti::placeholder { color: #282828; }
@@ -892,7 +894,7 @@
              draggable="false"
              onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
         <span class="logo-fallback" style="display:none">
-            <span class="logo-mark">◼</span>BLACK MIRROR BOARD<span class="logo-ver">v1.0</span>
+            <span class="logo-mark">◼</span>BLACK MIRROR BOARD<span class="logo-ver">v1.2</span>
         </span>
     </button>
     <div class="header-right">
@@ -1037,7 +1039,7 @@
 <div id="feedbackOverlay" role="dialog" aria-modal="true" aria-labelledby="feedbackTitle">
     <div id="feedbackModal">
         <button class="fm-close" id="feedbackClose" aria-label="Close">✕</button>
-        <div class="fm-eyebrow">KINOSHITA STUDIO — PROTOTYPE v0.9</div>
+        <div class="fm-eyebrow">KINOSHITA STUDIO — BLACK MIRROR v1.2</div>
         <div class="fm-title" id="feedbackTitle">◼ FEEDBACK &amp; CONTACT</div>
         <div class="fm-body">
             このプロトタイプへの<strong>要望・アイデア・バグ報告</strong>を歓迎します。<br>
@@ -1167,7 +1169,7 @@
 <!-- Usage overlay -->
 <div id="usageOverlay">
     <div class="usage-box">
-        <h2>USAGE — BLACK MIRROR BOARD v1.0</h2>
+        <h2>USAGE — BLACK MIRROR BOARD v1.2</h2>
         <h3>TOOLS</h3>
         <pre><b>↑ Select</b>   tap/click · drag to move · Del to delete
          ↳ drag ○ handle above box to rotate
@@ -1195,6 +1197,12 @@ Release → all fully-enclosed objects selected.
         <pre><b>SAVE</b>   download .json — all objects + terminal log
 <b>OPEN</b>   import .json — fully restore project
 Local only. No upload. No account required.</pre>
+        <h3>TERMINAL FILE OPS (v1.2)</h3>
+        <pre><b>save &lt;name&gt;</b>   commit canvas → <code>blackmirror / projects</code>
+<b>ls</b>            list every snapshot
+<b>load &lt;name&gt;</b>   restore a snapshot to the canvas
+
+snapshots live in <b>IndexedDB</b> — survive reloads, no upload.</pre>
         <h3>ANCHOR POINTS</h3>
         <pre>Select → blue □ anchors appear. Drag to deform:
   ○  4 edge points (radii)
@@ -1223,8 +1231,27 @@ Set before drawing, or apply to selected object.</pre>
 <b>light</b> / <b>light mode</b>  return to surface
 <b>gray</b> / <b>gray mode</b>   enter the studio (cobalt on pebble)
 <b>youtube</b>            a surprise awaits
-<b>help</b>               show this reference
+<b>help</b>               show quick reference
+<b>usage</b> / <b>man</b>          summon this manual overlay
 <b>clear</b>              flush terminal</pre>
+        <h3>COMMAND ECOSYSTEM (v1.2)</h3>
+        <pre><b>$scatter</b>           scatter selected objects
+<b>$grid-3x3</b>          place a 3x3 square grid
+<b>$biwako-blue</b>       retint every stroke to <code>#0044CC</code>
+
+<b>register &lt;name&gt; &lt;js&gt;</b>  save a JS action as <code>$name</code>
+<b>alias &lt;new&gt;=&lt;old&gt;</b>    duplicate a command
+<b>share &lt;name&gt;</b>         copy command JSON to clipboard
+<b>list</b>                  show all registered commands
+<b>export-all</b>            project + every spell → 1 .json bundle
+<b>forget &lt;name&gt;</b>        remove a user command
+
+paste a JSON payload
+  <code>{"command":"...", "action":"..."}</code>
+into the terminal → auto-register.
+
+spells live in <b>IndexedDB</b> (<code>blackmirror / commands</code>),
+mirrored to <code>localStorage</code> for portability.</pre>
         <button class="usage-close" onclick="closeUsage()">CLOSE ✕</button>
     </div>
 </div>
@@ -2276,14 +2303,15 @@ function renderObject(obj) {
     ctx.restore();
 }
 
-function baseStyle() {
-    ctx.strokeStyle = getStrokeColor(); ctx.lineWidth = 2.2;
+function baseStyle(obj) {
+    ctx.strokeStyle = (obj && obj.data && obj.data.stroke) || getStrokeColor();
+    ctx.lineWidth = 2.2;
     ctx.lineCap = 'round'; ctx.lineJoin = 'round';
 }
 
 function renderCircle(obj) {
     const {cx, cy, rx, ry} = obj.data;
-    ctx.save(); baseStyle();
+    ctx.save(); baseStyle(obj);
     ctx.beginPath(); ctx.ellipse(cx, cy, Math.max(rx,1), Math.max(ry,1), 0, 0, 2*Math.PI);
     const _cf = resolveFill(obj.data.fill); if (_cf) { ctx.fillStyle = _cf; ctx.fill(); }
     if (!obj.data.strokeOff) ctx.stroke();
@@ -2356,7 +2384,7 @@ function renderStroke(obj) {
     const { pts, lw, closed, fill, strokeOff } = obj.data;
     if (pts.length < 2) return;
     ctx.save();
-    ctx.strokeStyle = getStrokeColor(); ctx.lineWidth = lw; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    ctx.strokeStyle = obj.data.stroke || getStrokeColor(); ctx.lineWidth = lw; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
     ctx.beginPath(); ctx.moveTo(pts[0].x, pts[0].y);
     for (let i = 1; i < pts.length; i++) {
         const pp = pts[i-1], p = pts[i];
@@ -3537,22 +3565,17 @@ function highlightCmd(text) {
 }
 
 function highlightLine(text) {
-    if (!text.trim()) return text;
+    if (!text || !text.trim()) return esc(text || '');
     let s = esc(text);
-    // Leading → gets orange
-    s = s.replace(/^(→)/, '<span class="hl-arrow">→</span>');
-    // URLs
-    s = s.replace(/(https?:\/\/[^\s&quot;&lt;&gt;]+)/g, '<span class="hl-url">$1</span>');
-    // File paths
-    s = s.replace(/((?:\.\/|\/)[^\s&quot;&lt;&gt;:,]+)/g, '<span class="hl-path">$1</span>');
-    // Quoted strings
-    s = s.replace(/&quot;([^&]*)&quot;/g, '&quot;<span class="hl-str">$1</span>&quot;');
-    // Numbers with units
-    s = s.replace(/\b(\d+(?:\.\d+)?(?:s|ms|MB|kB|KB|B|%)?)\b/g, '<span class="hl-num">$1</span>');
-    // Hex hashes (sha-like)
-    s = s.replace(/\b([0-9a-f]{7,40})\b/g, '<span class="hl-hash">$1</span>');
-    // Status codes
-    s = s.replace(/\b(200|201|204|301|302|400|401|403|404|500|502)\b/g, '<span class="hl-num">$1</span>');
+    try {
+        s = s.replace(/^(→)/, '<span class="hl-arrow">→</span>');
+        s = s.replace(/(https?:\/\/[^\s&quot;&lt;&gt;]+)/g, '<span class="hl-url">$1</span>');
+        s = s.replace(/((?:\.\/|\/)[^\s&quot;&lt;&gt;:,]+)/g, '<span class="hl-path">$1</span>');
+        s = s.replace(/&quot;([^&]*)&quot;/g, '&quot;<span class="hl-str">$1</span>&quot;');
+        s = s.replace(/\b(\d+(?:\.\d+)?(?:s|ms|MB|kB|KB|B|%)?)\b/g, '<span class="hl-num">$1</span>');
+        s = s.replace(/\b([0-9a-f]{7,40})\b/g, '<span class="hl-hash">$1</span>');
+        s = s.replace(/\b(200|201|204|301|302|400|401|403|404|500|502)\b/g, '<span class="hl-num">$1</span>');
+    } catch { /* regex failure — fall back to escaped text */ }
     return s;
 }
 
@@ -3833,67 +3856,800 @@ function triggerYouTube() {
 // TERMINAL INPUT
 // ══════════════════════════════════════════════════
 
-document.getElementById('ti').addEventListener('keydown', e => {
-    if (e.key !== 'Enter') return;
-    const val = document.getElementById('ti').value.trim();
-    document.getElementById('ti').value = '';
-    if (!val) return;
-    const low = val.toLowerCase();
-    if (low==='youtube'||low==='yt'||low==='youtube.com') {
-        enqueue(`stdin > "${val}"`, ['→ keyword match: YOUTUBE', '→ triggering easter egg...']);
-        setTimeout(triggerYouTube, 600);
-    } else if (low==='clear'||low==='flush') {
-        flushTerm();
-    } else if (low==='dark'||low==='dark mode') {
-        if (MODE === 'dark') {
-            printRaw('[SYSTEM] already in dark mode — void already embraced.', 't-dim');
-        } else {
-            enqueue('[SYSTEM] Switching to DARK MODE...', [
-                '[SYSTEM] inverting color matrix...',
-                '[SYSTEM] canvas: #000000  stroke: #F0EDE6',
-                '[SYSTEM] grid: deep slate  mode: void',
-                '[SYSTEM] Environment initialized.',
-            ], 't-dim');
-            setTimeout(() => setMode('dark'), 220);
+// ══════════════════════════════════════════════════
+// v1.2 — COMMAND ECOSYSTEM
+//   · BM global API     — script-level control surface
+//   · custom command    — register / alias / share (persisted)
+//   · history (↑↓)      — recall prior inputs
+//   · JSON paste        — auto-register detection
+//   · save / ls / load  — IndexedDB project snapshots
+//   · export-all        — project + commands bundle
+// ══════════════════════════════════════════════════
+
+// ── BM: global API surface exposed to custom command actions ──────────────
+window.BM = {
+    getSelected() {
+        const one = S.objects.find(o => o.selected);
+        const multi = S.objects.filter(o => S.multiSelected.includes(o.id));
+        return multi.length ? multi : (one ? [one] : []);
+    },
+    all()   { return S.objects; },
+    clear() { S.objects = []; S.selectedId = null; S.multiSelected = []; },
+    create(type, props = {}) {
+        const vc = this.viewCenter();
+        const id = genId();
+        let data;
+        switch (type) {
+            case 'circle':   data = { cx: vc.x, cy: vc.y, rx: 60, ry: 60, rotation: 0, fill: null, strokeOff: false }; break;
+            case 'square':   data = { x: vc.x-50, y: vc.y-50, w: 100, h: 100, rotation: 0, fill: null, strokeOff: false }; break;
+            case 'triangle': data = { x: vc.x-60, y: vc.y-50, w: 120, h: 100, rotation: 0, fill: null, strokeOff: false }; break;
+            case 'arrow':    data = { x1: vc.x-60, y1: vc.y, x2: vc.x+60, y2: vc.y, rotation: 0 }; break;
+            case 'text':     data = { x: vc.x, y: vc.y, text: props.text || 'text', fontSize: 20 }; break;
+            default: throw new Error(`BM.create: unknown type "${type}"`);
         }
-    } else if (low==='light'||low==='light mode') {
-        if (MODE === 'light') {
-            printRaw('[SYSTEM] already in light mode — surface is clean.', 't-dim');
-        } else {
-            enqueue('[SYSTEM] Switching to LIGHT MODE...', [
-                '[SYSTEM] restoring color matrix...',
-                '[SYSTEM] canvas: #FAFAF8  stroke: #0c0c0c',
-                '[SYSTEM] grid: warm grey  mode: surface',
-                '[SYSTEM] Environment initialized.',
-            ], 't-dim');
-            setTimeout(() => setMode('light'), 220);
-        }
-    } else if (low==='gray'||low==='grey'||low==='gray mode'||low==='grey mode') {
-        if (MODE === 'gray') {
-            printRaw('[SYSTEM] already in gray mode — studio is live.', 't-dim');
-        } else {
-            enqueue('[SYSTEM] Initializing Studio Environment... GRAY_MODE enabled.', [
-                '[SYSTEM] loading pebble ground...',
-                '[SYSTEM] canvas: #DCDBD5  accent: #1600A2',
-                '[SYSTEM] grid: soft cobalt  mode: studio',
-                '[SYSTEM] Environment initialized.',
-            ], 't-dim');
-            setTimeout(() => setMode('gray'), 220);
-        }
-    } else if (low==='help') {
-        enqueue('help', ['draw shapes on canvas:',
-            '  ○  git init / npm create', '  ◎  docker run / kubectl',
-            '  △  git branch / build',    '  □  docker build / terraform',
-            '  →  curl | jq / grep | sort', '  T  text → stdin echo',
-            '', 'hidden commands:',
-            '  dark / dark mode   — embrace the void',
-            '  light / light mode — return to surface',
-            '  gray / gray mode   — enter the studio (cobalt on pebble)',
-            '  youtube            — a surprise awaits']);
-    } else {
-        enqueue(val, [`${val.split(' ')[0]}: command not found`]);
+        Object.assign(data, props);
+        const obj = { id, type, data, selected: false };
+        S.objects.push(obj);
+        return obj;
+    },
+    translate(obj, dx, dy) { moveObj(obj, dx, dy); },
+    remove(obj)            { S.objects = S.objects.filter(o => o !== obj); },
+    setStroke(obj, color)  { obj.data.stroke = color; },
+    setFill(obj, color)    { obj.data.fill   = color; },
+
+    // ── update: patch any data properties by id (the missing piece) ───
+    // Usage: BM.update(obj.id, { fill: '#FF0000', stroke: '#000' })
+    //   or:  BM.update(obj, { fill: '#FF0000' })  (pass object directly)
+    update(target, patch) {
+        const obj = (typeof target === 'string')
+            ? S.objects.find(o => o.id === target)
+            : target;
+        if (!obj || !obj.data) { this.log('update: object not found', 't-err'); return; }
+        Object.assign(obj.data, patch);
+        redrawAll();
+    },
+
+    // ── getById: find an object by its id ─────────────────────────────
+    getById(id) { return S.objects.find(o => o.id === id) || null; },
+
+    // ── find: search objects by predicate ─────────────────────────────
+    find(fn) { return S.objects.filter(fn); },
+
+    redraw() { redrawAll(); },
+    save()   { saveHistory(); },
+    log(msg, cls = 't-ok') { printRaw(`[BM] ${msg}`, cls); },
+    viewCenter() { return { x: (CW/2-VIEW.tx)/VIEW.scale, y: (CH/2-VIEW.ty)/VIEW.scale }; },
+    rand(min, max) { return min + Math.random() * (max - min); },
+    setMode(m) { setMode(m); },
+    getMode()  { return MODE; },
+};
+
+// ── Custom command registry (IndexedDB + localStorage shadow) ─────────────
+const BM_STORE_KEY = 'bm.customCommands.v1';
+const BM_DB_NAME   = 'blackmirror';
+const BM_DB_VERSION= 2;
+const BM_DB_STORE  = 'commands';
+const BM_DB_PROJECTS = 'projects';
+let   BM_CMDS = {};
+
+function _bmDbOpen() {
+    return new Promise((resolve, reject) => {
+        if (!('indexedDB' in window)) { reject(new Error('IndexedDB unavailable')); return; }
+        const req = indexedDB.open(BM_DB_NAME, BM_DB_VERSION);
+        req.onupgradeneeded = () => {
+            const db = req.result;
+            if (!db.objectStoreNames.contains(BM_DB_STORE)) db.createObjectStore(BM_DB_STORE, { keyPath: 'name' });
+            if (!db.objectStoreNames.contains(BM_DB_PROJECTS)) db.createObjectStore(BM_DB_PROJECTS, { keyPath: 'name' });
+        };
+        req.onsuccess = () => resolve(req.result);
+        req.onerror   = () => reject(req.error);
+    });
+}
+async function bmProjectsPut(record) { const db=await _bmDbOpen(); return new Promise((res,rej)=>{const tx=db.transaction(BM_DB_PROJECTS,'readwrite');tx.objectStore(BM_DB_PROJECTS).put(record);tx.oncomplete=()=>res();tx.onerror=()=>rej(tx.error)}); }
+async function bmProjectsGet(name)   { const db=await _bmDbOpen(); return new Promise((res,rej)=>{const tx=db.transaction(BM_DB_PROJECTS,'readonly');const r=tx.objectStore(BM_DB_PROJECTS).get(name);r.onsuccess=()=>res(r.result||null);r.onerror=()=>rej(r.error)}); }
+async function bmProjectsAll()       { const db=await _bmDbOpen(); return new Promise((res,rej)=>{const tx=db.transaction(BM_DB_PROJECTS,'readonly');const r=tx.objectStore(BM_DB_PROJECTS).getAll();r.onsuccess=()=>res(r.result||[]);r.onerror=()=>rej(r.error)}); }
+async function _bmDbGetAll()         { const db=await _bmDbOpen(); return new Promise((res,rej)=>{const tx=db.transaction(BM_DB_STORE,'readonly');const r=tx.objectStore(BM_DB_STORE).getAll();r.onsuccess=()=>res(r.result||[]);r.onerror=()=>rej(r.error)}); }
+async function _bmDbReplaceAll(recs) { const db=await _bmDbOpen(); return new Promise((res,rej)=>{const tx=db.transaction(BM_DB_STORE,'readwrite');const s=tx.objectStore(BM_DB_STORE);s.clear();for(const r of recs)s.put(r);tx.oncomplete=()=>res();tx.onerror=()=>rej(tx.error)}); }
+
+const BM_PRESETS = {
+    'scatter': { action: "const sel = BM.getSelected();\nif (!sel.length) { BM.log('select objects first.', 't-err'); return; }\nfor (const o of sel) {\n  BM.translate(o, BM.rand(-400, 400), BM.rand(-300, 300));\n}\nBM.log('scattered ' + sel.length + ' object(s).');", source: 'preset' },
+    'grid-3x3': { action: "const vc = BM.viewCenter();\nconst size = 80, gap = 28, step = size + gap;\nfor (let r = 0; r < 3; r++) {\n  for (let c = 0; c < 3; c++) {\n    BM.create('square', { x: vc.x - step + c*step - size/2, y: vc.y - step + r*step - size/2, w: size, h: size });\n  }\n}\nBM.log('grid 3x3 placed.');", source: 'preset' },
+    'biwako-blue': { action: "const BLUE = '#0044CC';\nlet count = 0;\nfor (const o of BM.all()) {\n  o.data.stroke = BLUE;\n  if (o.data.fill && o.data.fill !== 'none') o.data.fill = BLUE;\n  count++;\n}\nBM.log('BIWAKO SILENCE — ' + count + ' object(s) retinted to #0044CC.');", source: 'preset' },
+    'monoclo': { action: `
+const sel = BM.getSelected();
+const images = sel.filter(o => o.type === 'image');
+if (!images.length) { BM.log('select an image first.', 't-err'); return; }
+const total = images.length;
+let processed = 0, failed = 0;
+for (const obj of images) {
+  const img = new Image();
+  img.crossOrigin = 'anonymous';
+  (function(o) {
+    img.onload = function() {
+      try {
+        const cv = document.createElement('canvas');
+        cv.width = img.naturalWidth; cv.height = img.naturalHeight;
+        const cx = cv.getContext('2d');
+        cx.filter = 'grayscale(100%) contrast(110%) brightness(95%)';
+        cx.drawImage(img, 0, 0);
+        o.data.src = cv.toDataURL('image/png');
+        BM.redraw();
+        BM.save();
+        processed++;
+        if (processed + failed === total) BM.log('MONOCLO → ' + processed + '/' + total + ' image(s) converted');
+      } catch (e) {
+        failed++;
+        BM.log('MONOCLO failed (CORS): ' + e.message, 't-err');
+        if (processed + failed === total) BM.log('MONOCLO → ' + processed + '/' + total + ' image(s) converted');
+      }
+    };
+    img.onerror = function() { failed++; BM.log('MONOCLO: reload failed', 't-err'); };
+  })(obj);
+  img.src = obj.data.src;
+}
+`, source: 'preset' },
+    'fetch-img': { action: `
+const rawArgs = (typeof args === 'string') ? args.trim() : '';
+const tokens = rawArgs.length ? rawArgs.split(/\\s+/).filter(Boolean) : [];
+let count = 1;
+let keyword = 'biwako';
+if (tokens.length) {
+  const last = tokens[tokens.length - 1];
+  if (/^\\d+$/.test(last)) {
+    count = Math.max(1, Math.min(25, parseInt(last, 10)));
+    keyword = tokens.slice(0, -1).join(' ') || 'biwako';
+  } else {
+    keyword = tokens.join(' ');
+  }
+}
+const vc = BM.viewCenter();
+const W = 240, H = 180, GAP = 20;
+const cols = Math.ceil(Math.sqrt(count));
+const rows = Math.ceil(count / cols);
+const totalW = cols * W + (cols - 1) * GAP;
+const totalH = rows * H + (rows - 1) * GAP;
+const startX = vc.x - totalW / 2;
+const startY = vc.y - totalH / 2;
+const seed = Math.floor(Math.random() * 10000);
+BM.log('FETCHING: [' + keyword + '] × ' + count + '...');
+for (let i = 0; i < count; i++) {
+  const r = Math.floor(i / cols);
+  const c = i % cols;
+  const px = startX + c * (W + GAP);
+  const py = startY + r * (H + GAP);
+  const url = 'https://loremflickr.com/' + W + '/' + H + '/' + encodeURIComponent(keyword) + '?lock=' + (seed + i);
+  const img = new Image();
+  img.crossOrigin = 'anonymous';
+  (function(ix, iy, iw, ih, iurl, idx, total) {
+    img.onload = function() {
+      const id = Math.floor(Math.random()*0xFFFF).toString(16).padStart(4,'0').toUpperCase();
+      let src = iurl;
+      try {
+        const cv = document.createElement('canvas');
+        cv.width = img.naturalWidth; cv.height = img.naturalHeight;
+        cv.getContext('2d').drawImage(img, 0, 0);
+        src = cv.toDataURL('image/png');
+      } catch (e) {
+        BM.log('[warn] slot ' + (idx+1) + ' using URL (CORS blocked persistence)', 't-dim');
+      }
+      BM.all().push({ id: id, type: 'image', data: { x: ix, y: iy, w: iw, h: ih, src: src }, selected: false });
+      BM.redraw();
+      BM.save();
+      BM.log('IMAGE ' + (idx+1) + '/' + total + ' DEPLOYED');
+    };
+    img.onerror = function() { BM.log('FETCH FAILED: slot ' + (idx+1), 't-err'); };
+  })(px, py, W, H, url, i, count);
+  img.src = url;
+}
+BM.redraw();
+`, source: 'preset' },
+};
+
+function loadCmdsSync() { BM_CMDS = { ...BM_PRESETS }; try { const raw=localStorage.getItem(BM_STORE_KEY); const saved=raw?JSON.parse(raw):{}; for(const[name,v]of Object.entries(saved))BM_CMDS[name]=v; } catch{} }
+async function loadCmds() { loadCmdsSync(); try { const records=await _bmDbGetAll(); if(records.length){for(const r of records)BM_CMDS[r.name]={action:r.action,source:r.source||'user',createdAt:r.createdAt||null};} else { const migrated=Object.entries(BM_CMDS).filter(([,v])=>v.source!=='preset'); if(migrated.length) await _bmDbReplaceAll(migrated.map(([name,v])=>({name,action:v.action,source:v.source||'user',createdAt:v.createdAt||null}))); } } catch{} }
+function saveCmds() { const userOnly=Object.entries(BM_CMDS).filter(([,v])=>v.source!=='preset').map(([name,v])=>({name,action:v.action,source:v.source||'user',createdAt:v.createdAt||null})); _bmDbReplaceAll(userOnly).catch(()=>{}); try{const obj=Object.fromEntries(userOnly.map(r=>[r.name,{action:r.action,source:r.source,createdAt:r.createdAt}]));localStorage.setItem(BM_STORE_KEY,JSON.stringify(obj))}catch{} }
+function registerCmd(name, action, opts = {}) { const clean=(name||'').trim().toLowerCase().replace(/^\$/,''); if(!/^[a-z0-9][a-z0-9_-]{0,30}$/.test(clean)){printRaw(`[register] invalid command name: "${name}"`,'t-err');return false;} BM_CMDS[clean]={action:String(action),source:opts.source||'user',createdAt:new Date().toISOString()}; saveCmds(); return clean; }
+
+// Import a spell JSON ({command, action}) with collision-safe naming:
+//   - no existing entry → register as-is
+//   - identical user spell already exists → skip
+//   - collides with preset, or different user action → append _YYYY-MM-DD (and _2, _3 ...)
+function importSpellJson(parsed) {
+    const rawName = String(parsed && parsed.command || '').trim().toLowerCase().replace(/^\$/,'');
+    if (!/^[a-z0-9][a-z0-9_-]{0,30}$/.test(rawName)) { printRaw(`[import] invalid command name: "${parsed && parsed.command}"`,'t-err'); return null; }
+    const incoming = String(parsed.action || '');
+    const existing = BM_CMDS[rawName];
+    if (!existing) {
+        BM_CMDS[rawName] = { action: incoming, source: 'user', createdAt: new Date().toISOString() };
+        saveCmds();
+        return { name: rawName, status: 'new' };
     }
+    if (existing.source !== 'preset' && existing.action === incoming) {
+        return { name: rawName, status: 'skip_identical' };
+    }
+    const date = new Date().toISOString().slice(0,10);
+    let candidate = `${rawName}_${date}`, i = 2;
+    while (BM_CMDS[candidate]) { candidate = `${rawName}_${date}_${i}`; i++; }
+    BM_CMDS[candidate] = { action: incoming, source: 'user', createdAt: new Date().toISOString() };
+    saveCmds();
+    return { name: candidate, status: existing.source === 'preset' ? 'renamed_from_preset' : 'renamed', originalName: rawName };
+}
+
+function _importLog(result, sourceLabel) {
+    if (!result) return;
+    const head = sourceLabel || 'paste > [JSON payload intercepted]';
+    if (result.status === 'new') {
+        enqueue(head, ['→ schema check... ✓', `→ binding $${result.name}...`, `[OK] spell acquired — run: $${result.name}`]);
+    } else if (result.status === 'skip_identical') {
+        enqueue(head, ['→ schema check... ✓', `→ identical spell already exists: $${result.name}`, `[SKIP] no change — use existing $${result.name}`]);
+    } else if (result.status === 'renamed') {
+        enqueue(head, ['→ schema check... ✓', `→ name collision: $${result.originalName}`, `→ renamed to $${result.name}`, `[OK] spell acquired — run: $${result.name}`]);
+    } else if (result.status === 'renamed_from_preset') {
+        enqueue(head, ['→ schema check... ✓', `→ preset protected: $${result.originalName}`, `→ renamed to $${result.name}`, `[OK] spell acquired — run: $${result.name}`]);
+    }
+}
+function runCustomCmd(name, rawArgs) {
+    const cmd = BM_CMDS[name];
+    if (!cmd) { printRaw(`$${name}: command not found — type "list" to see registered commands`, 't-err'); return; }
+    try {
+        const fn = new Function('BM', 'args', cmd.action);
+        fn(window.BM, rawArgs || '');
+        redrawAll();
+        saveHistory();
+    } catch (err) {
+        printRaw(`[${name}] runtime error: ${err.message}`, 't-err');
+        printRaw(`  → ${err.stack ? err.stack.split('\n')[1]?.trim() : '(no stack)'}`, 't-dim');
+    }
+}
+
+// ── iOS Share + file naming ───────────────────────────────────────────────
+function bmFilename(suffix = '') { const d=new Date(),p=n=>String(n).padStart(2,'0'); return `BM_PROJECT_${d.getFullYear()}${p(d.getMonth()+1)}${p(d.getDate())}_${p(d.getHours())}${p(d.getMinutes())}${suffix}.json`; }
+function bmIsIOS() { const ua=navigator.userAgent||''; if(/iPhone|iPad|iPod/.test(ua)) return true; return ua.includes('Mac')&&(navigator.maxTouchPoints||0)>1; }
+async function bmDeliverJson(json, fname) {
+    if (bmIsIOS() && navigator.share) {
+        try { const file=new File([json],fname,{type:'application/json'}); if(navigator.canShare&&navigator.canShare({files:[file]})){await navigator.share({files:[file],title:'Black Mirror Project'});return'share';} await navigator.share({title:fname,text:json}); return'share'; } catch(err){ if(err&&err.name==='AbortError')return'cancelled'; }
+    }
+    const blob=new Blob([json],{type:'application/json'}),url=URL.createObjectURL(blob),a=document.createElement('a');
+    a.href=url;a.download=fname;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);return'download';
+}
+
+// ── Terminal history (↑/↓ recall) ─────────────────────────────────────────
+const BM_HISTORY_MAX = 80;
+let _termHist = [], _termHistIx = -1, _termDraft = '';
+function pushHistory(val) { if(!val)return; if(_termHist[_termHist.length-1]===val)return; _termHist.push(val); if(_termHist.length>BM_HISTORY_MAX)_termHist.shift(); _termHistIx=-1; try{localStorage.setItem('bm.termHistory.v1',JSON.stringify(_termHist))}catch{} }
+function loadTermHistory() { try{const raw=localStorage.getItem('bm.termHistory.v1');if(raw)_termHist=JSON.parse(raw)||[]}catch{} }
+
+// ── Main dispatcher — the single entry point for every terminal input ─────
+function runCommand(val) {
+    if (!val) return;
+
+    // ── RAW INPUT PARSER — bulletproof, no characters lost ────────────
+    // Step 1: grab the raw string exactly as typed
+    const raw = String(val);
+
+    // Step 2: strip leading/trailing whitespace
+    let clean = raw.trim();
+
+    // Step 3: strip leading "$" and any space after it
+    //   "$fetch-img forest" → "fetch-img forest"
+    //   "$ fetch-img forest" → "fetch-img forest"
+    //   "fetch-img forest"  → "fetch-img forest"
+    clean = clean.replace(/^\$\s*/, '');
+
+    // Step 4: split into command + args — FIRST space is the boundary
+    const spaceIdx = clean.indexOf(' ');
+    const head = (spaceIdx === -1 ? clean : clean.slice(0, spaceIdx)).toLowerCase();
+    const rest = spaceIdx === -1 ? '' : clean.slice(spaceIdx + 1).trim();
+    const low  = clean.toLowerCase();
+
+    // Debug: uncomment to verify in terminal
+    // printRaw(`[DBG] head="${head}" rest="${rest}" raw="${raw}"`, 't-dim');
+
+    if (head==='youtube'||head==='yt'||head==='youtube.com') { enqueue(`stdin > "${val}"`,['→ keyword match: YOUTUBE','→ triggering easter egg...']); setTimeout(triggerYouTube,600); return; }
+    if (head==='clear'||head==='flush') { flushTerm(); return; }
+    if (head==='dark'||low==='dark mode') { if(MODE==='dark'){printRaw('[SYSTEM] already in dark mode.','t-dim');return;} enqueue('[SYSTEM] Switching to DARK MODE...',['[SYSTEM] inverting color matrix...','[SYSTEM] canvas: #000000  stroke: #F0EDE6','[SYSTEM] Environment initialized.'],'t-dim'); setTimeout(()=>setMode('dark'),220); return; }
+    if (head==='light'||low==='light mode') { if(MODE==='light'){printRaw('[SYSTEM] already in light mode.','t-dim');return;} enqueue('[SYSTEM] Switching to LIGHT MODE...',['[SYSTEM] restoring color matrix...','[SYSTEM] canvas: #FAFAF8  stroke: #0c0c0c','[SYSTEM] Environment initialized.'],'t-dim'); setTimeout(()=>setMode('light'),220); return; }
+    if (head==='gray'||head==='grey'||low==='gray mode'||low==='grey mode') { if(MODE==='gray'){printRaw('[SYSTEM] already in gray mode.','t-dim');return;} enqueue('[SYSTEM] Initializing Studio Environment...',['[SYSTEM] canvas: #DCDBD5  accent: #1600A2','[SYSTEM] Environment initialized.'],'t-dim'); setTimeout(()=>setMode('gray'),220); return; }
+    if (head==='usage'||head==='man'||head==='docs') { enqueue(`$ ${head}`,['→ loading manual...','[SYSTEM] USAGE summoned — Esc to dismiss.'],'t-dim'); setTimeout(openUsage,260); return; }
+
+    // ── help ──────────────────────────────────────────────────────────────
+    if (head==='help'||head==='?') {
+        const cmdCount = Object.keys(BM_CMDS).length;
+        enqueue('$ help', [
+            '┌─────────────────────────────────────────────────────────────┐',
+            '│  ◼ BLACK MIRROR BOARD — QUICK REFERENCE                     │',
+            '│  build 1.2  ·  ' + cmdCount + ' spells loaded                              │',
+            '└─────────────────────────────────────────────────────────────┘',
+            '',
+            '  ╭── PROJECT (IndexedDB) ──────────────────────────────────╮',
+            '  │  save <name>     commit canvas → local DB               │',
+            '  │  ls              list saved snapshots                   │',
+            '  │  load <name>     restore a snapshot                     │',
+            '  ╰─────────────────────────────────────────────────────────╯',
+            '',
+            '  ╭── COMMAND ECOSYSTEM ────────────────────────────────────╮',
+            '  │  $scatter / $grid-3x3 / $biwako-blue                   │',
+            '  │  register <n> <js>     save a new spell                 │',
+            '  │  alias <new>=<old>     duplicate a spell                │',
+            '  │  share <name>          copy JSON to clipboard           │',
+            '  │  list                  show every registered spell      │',
+            '  │  export-all            project + spells → 1 .json       │',
+            '  │  forget <name>         remove a user spell              │',
+            '  ╰─────────────────────────────────────────────────────────╯',
+            '',
+            '  THEMES: dark · light · gray     TOOLS: S P N E C G Q A T',
+        ]);
+        return;
+    }
+
+    // ── save / ls / load ──────────────────────────────────────────────────
+    if (head==='save') { const name=rest.trim(); if(!/^[a-zA-Z0-9][a-zA-Z0-9_\- .]{0,40}$/.test(name)){printRaw('save: usage → save <name>','t-err');return;} const record={name,savedAt:new Date().toISOString(),objectCount:S.objects.length,view:{scale:VIEW.scale,tx:VIEW.tx,ty:VIEW.ty},objects:JSON.parse(JSON.stringify(S.objects))}; bmProjectsPut(record).then(()=>{enqueue(`save ${name}`,['→ serializing...','→ '+record.objectCount+' object(s)',`[SUCCESS] Snapshot '${name}' committed.`])}).catch(err=>{printRaw('save: '+err.message,'t-err')}); return; }
+    if (head==='ls') { bmProjectsAll().then(rows=>{if(!rows.length){enqueue('ls',['no saved projects.','tip: $ save <name>']);return;} rows.sort((a,b)=>(b.savedAt||'').localeCompare(a.savedAt||'')); const lines=['saved projects  —  '+rows.length+' entries','', ...rows.map(r=>'  '+r.name.padEnd(20)+' '+(r.savedAt||'').slice(0,16)+' '+((r.objectCount??0)+' obj'))]; enqueue('ls',lines)}).catch(err=>{printRaw('ls: '+err.message,'t-err')}); return; }
+    if (head==='load') { const name=rest.trim(); if(!name){printRaw('load: usage → load <name>','t-err');return;} bmProjectsGet(name).then(p=>{if(!p){printRaw(`load: '${name}' not found`,'t-err');return;} S.objects=p.objects||[];S.selectedId=null;S.multiSelected=[];S.objects.forEach(o=>o.selected=false);if(p.view){VIEW.scale=p.view.scale||1;VIEW.tx=p.view.tx||0;VIEW.ty=p.view.ty||0;updateZoomLabel();}redrawAll();saveHistory();enqueue(`load ${name}`,['→ restored '+(p.objectCount??p.objects.length)+' object(s)',`[SUCCESS] Snapshot '${name}' restored.`])}).catch(err=>{printRaw('load: '+err.message,'t-err')}); return; }
+
+    // ── list ──────────────────────────────────────────────────────────────
+    if (head==='list') { const names=Object.keys(BM_CMDS).sort(); if(!names.length){enqueue('list',['no commands registered.']);return;} const rows=names.map(n=>{const c=BM_CMDS[n];return`  ${(c.source==='preset'?'[preset]':'[ user ]')}  $${n}`}); enqueue('list',['registered commands:',...rows]); return; }
+
+    // ── export-all ────────────────────────────────────────────────────────
+    if (head==='export-all'||head==='exportall') {
+        const cmdNames=Object.keys(BM_CMDS).sort();
+        const commands=cmdNames.map(n=>({command:n,source:BM_CMDS[n].source||'user',createdAt:BM_CMDS[n].createdAt||null,action:BM_CMDS[n].action}));
+        const project={view:{scale:VIEW.scale,tx:VIEW.tx,ty:VIEW.ty},objects:JSON.parse(JSON.stringify(S.objects)),objectCount:S.objects.length};
+        const payload={format:'blackmirror.bundle',version:'1.2',exportedAt:new Date().toISOString(),project,commands};
+        const json=JSON.stringify(payload,null,2), fname=bmFilename('_BUNDLE');
+        enqueue('export-all',['→ '+project.objectCount+' object(s) + '+commands.length+' command(s)','→ '+fname+' — '+(json.length/1024).toFixed(1)+' KB']);
+        bmDeliverJson(json,fname).then(r=>{if(r==='share')printRaw('[export-all] shared ✓','t-ok');else if(r!=='cancelled')printRaw('[export-all] downloaded ✓','t-ok')}).catch(()=>{});
+        return;
+    }
+
+    // ── export ─ サブコマンド分岐 ────────────────────────────────────────
+    //   export              → 選択オブジェクトを透過 PNG で書き出し（X キーと同じ）
+    //   export magic        → 魔法ピッカー（個別選択）
+    //   export data         → バンドル書き出しダイアログ（粒度調整）
+    if (head==='export') {
+        const sub = rest.trim().toLowerCase();
+        if (sub === 'magic' || sub === 'spells') {
+            const names = Object.keys(BM_CMDS).sort();
+            if (!names.length) { printRaw('export magic: no spells registered.','t-err'); return; }
+            showExportPicker(names);
+            enqueue('export magic', ['→ opening picker... select spells and press EXPORT.']);
+            return;
+        }
+        if (sub === 'data' || sub === 'bundle') {
+            showBundleExportDialog();
+            enqueue('export data', ['→ opening export dialog...']);
+            return;
+        }
+        if (sub === '' || sub === 'png' || sub === 'image') {
+            enqueue('export', ['→ exporting selected object(s) as transparent PNG...']);
+            exportPng();
+            return;
+        }
+        printRaw(`export: unknown subcommand "${sub}" — try: export, export magic, export data`, 't-err');
+        return;
+    }
+
+    // ── export-spells ─ 魔法だけをファイル化（キャンバス無し）────────────
+    if (head==='export-spells'||head==='exportspells') {
+        const requested = rest.trim().split(/\s+/).filter(Boolean).map(n => n.replace(/^\$/,'').toLowerCase());
+        let targetNames;
+        if (requested.length) {
+            const missing = requested.filter(n => !BM_CMDS[n]);
+            if (missing.length) { printRaw(`export-spells: not found → ${missing.map(n=>'$'+n).join(', ')}`,'t-err'); return; }
+            targetNames = requested;
+        } else {
+            targetNames = Object.keys(BM_CMDS).filter(n => BM_CMDS[n].source !== 'preset').sort();
+            if (!targetNames.length) { printRaw('export-spells: no user spells to export.','t-err'); return; }
+        }
+        const commands = targetNames.map(n => ({ command: n, action: BM_CMDS[n].action }));
+        const payload = { format:'blackmirror.spells', version:'1.2', exportedAt:new Date().toISOString(), commands };
+        const json = JSON.stringify(payload, null, 2), fname = bmFilename('_SPELLS');
+        enqueue(`export-spells${rest?' '+rest:''}`, ['→ '+commands.length+' spell(s)', '→ '+fname+' — '+(json.length/1024).toFixed(1)+' KB']);
+        bmDeliverJson(json, fname).then(r=>{if(r==='share')printRaw('[export-spells] shared ✓','t-ok');else if(r!=='cancelled')printRaw('[export-spells] downloaded ✓','t-ok')}).catch(()=>{});
+        return;
+    }
+
+    if (head==='forget'||head==='unregister') { const target=rest.trim().replace(/^\$/,'').toLowerCase(); if(!target){printRaw('forget: missing name','t-err');return;} if(!BM_CMDS[target]){printRaw(`forget: "${target}" not found`,'t-err');return;} if(BM_CMDS[target].source==='preset'){printRaw(`forget: "${target}" is a preset`,'t-err');return;} delete BM_CMDS[target]; saveCmds(); printRaw(`[forget] ${target} removed.`,'t-ok'); return; }
+    if (head==='register') { const m=rest.match(/^([a-zA-Z0-9][a-zA-Z0-9_-]{0,30})\s+([\s\S]+)$/); if(!m){printRaw('register: usage → register <name> <action JS>','t-err');return;} const saved=registerCmd(m[1],m[2]); if(saved)enqueue(`register ${m[1]}`,['→ compiling...','→ persisting...',`[OK] $${saved} — try it now.`]); return; }
+    if (head==='alias') { const m=rest.match(/^([a-zA-Z0-9][a-zA-Z0-9_-]{0,30})\s*=\s*\$?([a-zA-Z0-9][a-zA-Z0-9_-]{0,30})$/); if(!m){printRaw('alias: usage → alias <new>=<existing>','t-err');return;} const target2=BM_CMDS[m[2].toLowerCase()]; if(!target2){printRaw(`alias: "${m[2]}" not found`,'t-err');return;} registerCmd(m[1],target2.action,{source:'user'}); printRaw(`[alias] $${m[1]} → $${m[2]}`,'t-ok'); return; }
+    if (head==='share') { const target3=rest.trim().replace(/^\$/,'').toLowerCase(); if(!target3||!BM_CMDS[target3]){printRaw(`share: "${rest}" not found`,'t-err');return;} const pl=JSON.stringify({command:target3,action:BM_CMDS[target3].action},null,2); const ship=()=>enqueue(`share ${target3}`,['→ copied to clipboard!','───────────────────',...pl.split('\n').slice(0,10),'───────────────────']); if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(pl).then(ship,ship)}else{ship()} return; }
+
+    // ── Debug: objects ────────────────────────────────────────────────────
+    if (head==='objects') {
+        if (!S.objects.length) { enqueue('objects',['(canvas empty)']); return; }
+        enqueue('objects', S.objects.map(o => `  ${o.id} ${o.type} sel=${!!o.selected} stroke=${o.data.stroke||'theme'} fill=${o.data.fill||'none'}`));
+        return;
+    }
+
+    // ── Debug: test-parse ─────────────────────────────────────────────────
+    if (head==='test-parse') {
+        enqueue('test-parse', [`  head="${head}"`, `  rest="${rest}"`, `  raw="${val}"`]);
+        return;
+    }
+
+    // ── Custom command dispatch ───────────────────────────────────────────
+    if (BM_CMDS[head]) { enqueue(`$ ${head}${rest ? ' ' + rest : ''}`,['→ executing action...']); runCustomCmd(head, rest); return; }
+
+    enqueue(val, [`${head}: command not found`]);
+}
+
+// ── JSON paste detection — auto-register ──────────────────────────────────
+function tryParseCommandJson(text) { if(!text||typeof text!=='string')return null; const t=text.trim(); if(!t.startsWith('{'))return null; try{const j=JSON.parse(t);if(j&&typeof j.command==='string'&&typeof j.action==='string')return j;}catch{} return null; }
+
+// ── Wire the terminal input: keydown + paste ──────────────────────────────
+const tiEl = document.getElementById('ti');
+loadTermHistory();
+loadCmds();
+
+tiEl.addEventListener('keydown', e => {
+    // History navigation
+    if (e.key === 'ArrowUp') { e.preventDefault(); if(!_termHist.length)return; if(_termHistIx===-1){_termDraft=tiEl.value;_termHistIx=_termHist.length;} _termHistIx=Math.max(0,_termHistIx-1); tiEl.value=_termHist[_termHistIx]||''; requestAnimationFrame(()=>tiEl.setSelectionRange(tiEl.value.length,tiEl.value.length)); return; }
+    if (e.key === 'ArrowDown') { e.preventDefault(); if(_termHistIx===-1)return; _termHistIx++; if(_termHistIx>=_termHist.length){_termHistIx=-1;tiEl.value=_termDraft}else{tiEl.value=_termHist[_termHistIx]} requestAnimationFrame(()=>tiEl.setSelectionRange(tiEl.value.length,tiEl.value.length)); return; }
+
+    // Only Enter submits — space/other keys must NOT trigger submit
+    if (e.key !== 'Enter') return;
+
+    // CRITICAL: grab the FULL input value BEFORE clearing
+    const raw = tiEl.value;
+    const val = raw.trim();
+    tiEl.value = '';
+    _termHistIx = -1; _termDraft = '';
+    if (!val) return;
+    pushHistory(val);
+
+    // JSON paste auto-register (with collision-safe rename)
+    const parsed = tryParseCommandJson(val);
+    if (parsed) { _importLog(importSpellJson(parsed), 'stdin > [JSON payload detected]'); return; }
+
+    runCommand(val);
 });
+
+tiEl.addEventListener('paste', e => {
+    // Use setTimeout to let the browser finish inserting pasted text first.
+    // This fixes mobile long-press paste where clipboardData may be empty.
+    const clipText = (e.clipboardData || window.clipboardData)?.getData('text');
+    if (clipText) {
+        const routed = tryImportAnyJson(clipText, 'paste > [JSON payload intercepted]');
+        if (routed) { e.preventDefault(); pushHistory(clipText); return; }
+    }
+    // Fallback: read from input value after browser inserts (mobile compat)
+    setTimeout(() => {
+        const val = tiEl.value;
+        if (tryImportAnyJson(val, 'paste > [JSON payload detected]')) {
+            tiEl.value = '';
+            pushHistory(val);
+        }
+    }, 50);
+});
+
+// ══════════════════════════════════════════════════
+// UNIFIED JSON IMPORT — auto-detects 4 formats:
+//   1. {command, action}                           → single spell
+//   2. [{command, action}, ...]                    → array of spells
+//   3. {format:'blackmirror.spells', commands:[]}  → spells package
+//   4. {format:'blackmirror.bundle', project, commands} → full bundle
+// ══════════════════════════════════════════════════
+
+function tryImportAnyJson(text, headLabel) {
+    if (!text || typeof text !== 'string') return false;
+    const t = text.trim();
+    if (!t.startsWith('{') && !t.startsWith('[')) return false;
+    let j;
+    try { j = JSON.parse(t); } catch { return false; }
+    return routeImport(j, headLabel || 'import > [JSON payload detected]');
+}
+
+function routeImport(j, headLabel) {
+    if (!j) return false;
+    // 1. Single spell
+    if (typeof j === 'object' && typeof j.command === 'string' && typeof j.action === 'string') {
+        _importLog(importSpellJson(j), headLabel);
+        return true;
+    }
+    // 2. Array of spells
+    if (Array.isArray(j)) {
+        const spells = j.filter(x => x && typeof x.command === 'string' && typeof x.action === 'string');
+        if (!spells.length) return false;
+        importSpellsBatch(spells, headLabel);
+        return true;
+    }
+    // 3. Spells package
+    if (j.format === 'blackmirror.spells' && Array.isArray(j.commands)) {
+        importSpellsBatch(j.commands, headLabel);
+        return true;
+    }
+    // 4. Full bundle
+    if (j.format === 'blackmirror.bundle' && j.project && Array.isArray(j.commands)) {
+        showBundleDialog(j, headLabel);
+        return true;
+    }
+    return false;
+}
+
+function importSpellsBatch(spells, headLabel) {
+    let added = 0, skipped = 0, renamed = 0;
+    const lines = [`→ schema check... ✓`, `→ ${spells.length} spell(s) in payload`];
+    for (const sp of spells) {
+        const r = importSpellJson(sp);
+        if (!r) continue;
+        if (r.status === 'new') { added++; lines.push(`  [OK]     $${r.name}`); }
+        else if (r.status === 'skip_identical') { skipped++; lines.push(`  [SKIP]   $${r.name} — identical`); }
+        else if (r.status === 'renamed' || r.status === 'renamed_from_preset') { renamed++; lines.push(`  [RENAME] $${r.originalName} → $${r.name}`); }
+    }
+    lines.push(`— ${added} added · ${renamed} renamed · ${skipped} skipped`);
+    enqueue(headLabel, lines);
+}
+
+function showBundleDialog(bundle, headLabel) {
+    const objCount = (bundle.project.objects || []).length;
+    const cmdCount = bundle.commands.length;
+    const existingObjCount = S.objects.length;
+    const ov = document.createElement('div');
+    ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.82);display:flex;align-items:center;justify-content:center;z-index:99999;font:13px/1.5 monospace;color:#e8e6e0;';
+    const card = document.createElement('div');
+    card.style.cssText = 'background:#0c0c0c;border:1px solid #333;padding:28px 32px;min-width:320px;max-width:480px;';
+    card.innerHTML = `
+        <div style="font-size:11px;letter-spacing:.3em;color:#666;margin-bottom:16px;">◼ BUNDLE DETECTED</div>
+        <div style="margin-bottom:8px;">incoming: <span style="color:#7fdb7f;">${objCount} object(s)</span>, <span style="color:#7fdb7f;">${cmdCount} spell(s)</span></div>
+        <div style="margin-bottom:20px;color:#888;">current canvas: ${existingObjCount} object(s)</div>
+        <div style="display:flex;flex-direction:column;gap:8px;">
+            <button data-a="overwrite" style="background:#1a1a1a;border:1px solid #444;color:#e8e6e0;padding:10px 14px;text-align:left;font:inherit;cursor:pointer;">[O] OVERWRITE — 現行を消して置き換え</button>
+            <button data-a="merge" style="background:#1a1a1a;border:1px solid #444;color:#e8e6e0;padding:10px 14px;text-align:left;font:inherit;cursor:pointer;">[A] ADD — 現行に追加マージ</button>
+            <button data-a="cancel" style="background:transparent;border:1px solid #333;color:#888;padding:10px 14px;text-align:left;font:inherit;cursor:pointer;">[C] CANCEL</button>
+        </div>
+    `;
+    ov.appendChild(card);
+    document.body.appendChild(ov);
+    const close = () => { try { document.body.removeChild(ov); } catch {} };
+    card.querySelectorAll('button').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const a = btn.getAttribute('data-a');
+            close();
+            if (a === 'cancel') { enqueue(headLabel, ['→ bundle import cancelled.']); return; }
+            importBundle(bundle, a, headLabel);
+        });
+        btn.addEventListener('mouseenter', () => { btn.style.background = '#222'; });
+        btn.addEventListener('mouseleave', () => { btn.style.background = btn.getAttribute('data-a')==='cancel'?'transparent':'#1a1a1a'; });
+    });
+    ov.addEventListener('click', e => { if (e.target === ov) { close(); enqueue(headLabel, ['→ bundle import cancelled.']); } });
+}
+
+function importBundle(bundle, mode, headLabel) {
+    const incoming = Array.isArray(bundle.project.objects) ? JSON.parse(JSON.stringify(bundle.project.objects)) : [];
+    const preObjCount = S.objects.length;
+    if (mode === 'overwrite') {
+        S.objects = incoming;
+    } else { // merge — re-id incoming to avoid collisions
+        const usedIds = new Set(S.objects.map(o => o.id));
+        for (const obj of incoming) {
+            while (usedIds.has(obj.id)) { obj.id = Math.floor(Math.random()*0xFFFF).toString(16).padStart(4,'0').toUpperCase(); }
+            usedIds.add(obj.id);
+            obj.selected = false;
+            S.objects.push(obj);
+        }
+    }
+    S.selectedId = null; S.multiSelected = [];
+    if (bundle.project.view && mode === 'overwrite') { VIEW.scale = bundle.project.view.scale || 1; VIEW.tx = bundle.project.view.tx || 0; VIEW.ty = bundle.project.view.ty || 0; updateZoomLabel(); }
+    redrawAll(); saveHistory();
+
+    const spellLines = [];
+    let added = 0, skipped = 0, renamed = 0;
+    for (const sp of (bundle.commands || [])) {
+        const r = importSpellJson(sp);
+        if (!r) continue;
+        if (r.status === 'new') { added++; spellLines.push(`  [OK]     $${r.name}`); }
+        else if (r.status === 'skip_identical') { skipped++; spellLines.push(`  [SKIP]   $${r.name} — identical`); }
+        else if (r.status === 'renamed' || r.status === 'renamed_from_preset') { renamed++; spellLines.push(`  [RENAME] $${r.originalName} → $${r.name}`); }
+    }
+    const modeLabel = mode === 'overwrite' ? 'OVERWRITE' : 'ADD';
+    enqueue(headLabel, [
+        `→ bundle mode: ${modeLabel}`,
+        `→ canvas: ${preObjCount} → ${S.objects.length} object(s)`,
+        `→ spells: ${(bundle.commands||[]).length} in payload`,
+        ...spellLines,
+        `[OK] bundle imported — ${added} added · ${renamed} renamed · ${skipped} skipped`,
+    ]);
+}
+
+// ── Export picker ─ 対話的に魔法を選んで書き出すモーダル ──
+function showExportPicker(names) {
+    const ov = document.createElement('div');
+    ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.82);display:flex;align-items:center;justify-content:center;z-index:99999;font:13px/1.5 monospace;color:#e8e6e0;';
+    const card = document.createElement('div');
+    card.style.cssText = 'background:#0c0c0c;border:1px solid #333;padding:24px 28px;min-width:360px;max-width:520px;max-height:80vh;display:flex;flex-direction:column;';
+    const rows = names.map(n => {
+        const src = BM_CMDS[n].source === 'preset' ? 'preset' : ' user ';
+        const cls = BM_CMDS[n].source === 'preset' ? '#888' : '#e8e6e0';
+        return `<label style="display:flex;align-items:center;gap:10px;padding:6px 8px;cursor:pointer;border-bottom:1px solid #1a1a1a;">
+          <input type="checkbox" data-name="${n}" style="accent-color:#7fdb7f;cursor:pointer;">
+          <span style="color:#666;font-size:11px;">[${src}]</span>
+          <span style="color:${cls};">$${n}</span>
+        </label>`;
+    }).join('');
+    card.innerHTML = `
+        <div style="font-size:11px;letter-spacing:.3em;color:#666;margin-bottom:14px;">◼ EXPORT SPELLS</div>
+        <div style="color:#888;font-size:12px;margin-bottom:12px;">書き出したい魔法にチェック → EXPORT SELECTED</div>
+        <div style="display:flex;gap:6px;margin-bottom:12px;">
+            <button data-a="all"  style="background:#1a1a1a;border:1px solid #333;color:#e8e6e0;padding:4px 10px;font:inherit;cursor:pointer;font-size:11px;">SELECT ALL</button>
+            <button data-a="user" style="background:#1a1a1a;border:1px solid #333;color:#e8e6e0;padding:4px 10px;font:inherit;cursor:pointer;font-size:11px;">USER ONLY</button>
+            <button data-a="none" style="background:#1a1a1a;border:1px solid #333;color:#e8e6e0;padding:4px 10px;font:inherit;cursor:pointer;font-size:11px;">CLEAR</button>
+            <span data-role="count" style="margin-left:auto;color:#888;font-size:11px;align-self:center;">0 selected</span>
+        </div>
+        <div data-role="list" style="overflow-y:auto;border:1px solid #222;padding:4px 0;margin-bottom:16px;flex:1;">${rows}</div>
+        <div style="display:flex;gap:8px;justify-content:flex-end;">
+            <button data-a="cancel" style="background:transparent;border:1px solid #333;color:#888;padding:8px 14px;font:inherit;cursor:pointer;">CANCEL</button>
+            <button data-a="export" style="background:#1a1a1a;border:1px solid #7fdb7f;color:#7fdb7f;padding:8px 18px;font:inherit;cursor:pointer;">EXPORT SELECTED</button>
+        </div>
+    `;
+    ov.appendChild(card);
+    document.body.appendChild(ov);
+
+    const checks = card.querySelectorAll('input[type=checkbox]');
+    const countEl = card.querySelector('[data-role=count]');
+    const updateCount = () => {
+        const n = Array.from(checks).filter(c => c.checked).length;
+        countEl.textContent = `${n} selected`;
+    };
+    checks.forEach(c => c.addEventListener('change', updateCount));
+
+    const close = () => { try { document.body.removeChild(ov); } catch {} };
+
+    card.querySelectorAll('button').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const a = btn.getAttribute('data-a');
+            if (a === 'all')    { checks.forEach(c => c.checked = true); updateCount(); return; }
+            if (a === 'user')   { checks.forEach(c => c.checked = BM_CMDS[c.dataset.name].source !== 'preset'); updateCount(); return; }
+            if (a === 'none')   { checks.forEach(c => c.checked = false); updateCount(); return; }
+            if (a === 'cancel') { close(); enqueue('export', ['→ export cancelled.']); return; }
+            if (a === 'export') {
+                const picked = Array.from(checks).filter(c => c.checked).map(c => c.dataset.name);
+                if (!picked.length) { countEl.textContent = 'select at least one spell'; countEl.style.color = '#ff6b6b'; return; }
+                close();
+                const commands = picked.map(n => ({ command: n, action: BM_CMDS[n].action }));
+                const payload = { format:'blackmirror.spells', version:'1.2', exportedAt:new Date().toISOString(), commands };
+                const json = JSON.stringify(payload, null, 2), fname = bmFilename('_SPELLS');
+                enqueue('export', ['→ '+commands.length+' spell(s) selected', '→ '+fname+' — '+(json.length/1024).toFixed(1)+' KB']);
+                bmDeliverJson(json, fname).then(r=>{if(r==='share')printRaw('[export] shared ✓','t-ok');else if(r!=='cancelled')printRaw('[export] downloaded ✓','t-ok')}).catch(()=>{});
+            }
+        });
+    });
+    ov.addEventListener('click', e => { if (e.target === ov) { close(); enqueue('export', ['→ export cancelled.']); } });
+}
+
+// ── Bundle export dialog ─ 粒度調整して書き出し ──
+function showBundleExportDialog() {
+    const objCount = S.objects.length;
+    const userSpells    = Object.keys(BM_CMDS).filter(n => BM_CMDS[n].source !== 'preset');
+    const presetSpells  = Object.keys(BM_CMDS).filter(n => BM_CMDS[n].source === 'preset');
+
+    const ov = document.createElement('div');
+    ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.82);display:flex;align-items:center;justify-content:center;z-index:99999;font:13px/1.5 monospace;color:#e8e6e0;';
+    const card = document.createElement('div');
+    card.style.cssText = 'background:#0c0c0c;border:1px solid #333;padding:24px 28px;min-width:380px;max-width:520px;';
+    card.innerHTML = `
+        <div style="font-size:11px;letter-spacing:.3em;color:#666;margin-bottom:14px;">◼ EXPORT DATA</div>
+        <div style="color:#888;font-size:12px;margin-bottom:18px;">書き出す内容を選択 → EXPORT BUNDLE</div>
+
+        <label style="display:flex;align-items:flex-start;gap:10px;padding:8px 0;cursor:pointer;border-top:1px solid #1a1a1a;">
+            <input type="checkbox" data-k="canvas" checked style="accent-color:#7fdb7f;margin-top:3px;">
+            <div>
+                <div>include canvas</div>
+                <div style="color:#666;font-size:11px;">${objCount} object(s) in current board</div>
+            </div>
+        </label>
+
+        <label style="display:flex;align-items:flex-start;gap:10px;padding:8px 0;cursor:pointer;border-top:1px solid #1a1a1a;">
+            <input type="checkbox" data-k="user" checked style="accent-color:#7fdb7f;margin-top:3px;">
+            <div>
+                <div>include user spells</div>
+                <div style="color:#666;font-size:11px;">${userSpells.length} spell(s) registered by you</div>
+            </div>
+        </label>
+
+        <label style="display:flex;align-items:flex-start;gap:10px;padding:8px 0;cursor:pointer;border-top:1px solid #1a1a1a;border-bottom:1px solid #1a1a1a;margin-bottom:18px;">
+            <input type="checkbox" data-k="preset" style="accent-color:#7fdb7f;margin-top:3px;">
+            <div>
+                <div>include preset spells</div>
+                <div style="color:#666;font-size:11px;">${presetSpells.length} preset(s) — 受信側が既に持っているので通常OFF</div>
+            </div>
+        </label>
+
+        <div data-role="warn" style="color:#ff6b6b;font-size:11px;margin-bottom:8px;min-height:14px;"></div>
+
+        <div style="display:flex;gap:8px;justify-content:flex-end;">
+            <button data-a="cancel" style="background:transparent;border:1px solid #333;color:#888;padding:8px 14px;font:inherit;cursor:pointer;">CANCEL</button>
+            <button data-a="export" style="background:#1a1a1a;border:1px solid #7fdb7f;color:#7fdb7f;padding:8px 18px;font:inherit;cursor:pointer;">EXPORT BUNDLE</button>
+        </div>
+    `;
+    ov.appendChild(card);
+    document.body.appendChild(ov);
+
+    const close = () => { try { document.body.removeChild(ov); } catch {} };
+    const warnEl = card.querySelector('[data-role=warn]');
+
+    card.querySelectorAll('button').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const a = btn.getAttribute('data-a');
+            if (a === 'cancel') { close(); enqueue('export data', ['→ export cancelled.']); return; }
+            const opts = {};
+            card.querySelectorAll('input[type=checkbox]').forEach(c => { opts[c.dataset.k] = c.checked; });
+            if (!opts.canvas && !opts.user && !opts.preset) {
+                warnEl.textContent = 'select at least one category';
+                return;
+            }
+            close();
+
+            // Build payload with selected categories
+            const commands = [];
+            if (opts.user)   userSpells  .forEach(n => commands.push({ command:n, source:'user',   createdAt:BM_CMDS[n].createdAt||null, action:BM_CMDS[n].action }));
+            if (opts.preset) presetSpells.forEach(n => commands.push({ command:n, source:'preset', createdAt:BM_CMDS[n].createdAt||null, action:BM_CMDS[n].action }));
+
+            let payload, suffix;
+            if (opts.canvas) {
+                // bundle format (canvas present)
+                const project = { view:{scale:VIEW.scale,tx:VIEW.tx,ty:VIEW.ty}, objects:JSON.parse(JSON.stringify(S.objects)), objectCount:S.objects.length };
+                payload = { format:'blackmirror.bundle', version:'1.2', exportedAt:new Date().toISOString(), project, commands };
+                suffix = '_BUNDLE';
+            } else {
+                // spells-only format
+                payload = { format:'blackmirror.spells', version:'1.2', exportedAt:new Date().toISOString(), commands };
+                suffix = '_SPELLS';
+            }
+            const json = JSON.stringify(payload, null, 2), fname = bmFilename(suffix);
+            const lines = [
+                `→ canvas: ${opts.canvas ? objCount + ' object(s)' : 'excluded'}`,
+                `→ spells: ${commands.length} (${opts.user?'user':''}${opts.user&&opts.preset?'+':''}${opts.preset?'preset':''}${!opts.user&&!opts.preset?'none':''})`,
+                `→ ${fname} — ${(json.length/1024).toFixed(1)} KB`,
+            ];
+            enqueue('export data', lines);
+            bmDeliverJson(json, fname).then(r=>{if(r==='share')printRaw('[export data] shared ✓','t-ok');else if(r!=='cancelled')printRaw('[export data] downloaded ✓','t-ok')}).catch(()=>{});
+        });
+    });
+    ov.addEventListener('click', e => { if (e.target === ov) { close(); enqueue('export data', ['→ export cancelled.']); } });
+}
+
+// ── File drag-and-drop → read as JSON and route ──
+(function setupBoardDnD() {
+    const overlay = document.createElement('div');
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(12,12,12,0.88);border:2px dashed #7fdb7f;display:none;align-items:center;justify-content:center;z-index:99998;font:14px/1.5 monospace;color:#e8e6e0;letter-spacing:.2em;pointer-events:none;';
+    overlay.textContent = '◼ DROP JSON HERE';
+    document.body.appendChild(overlay);
+
+    let dragDepth = 0;
+    document.addEventListener('dragenter', e => {
+        if (!e.dataTransfer || !Array.from(e.dataTransfer.types||[]).includes('Files')) return;
+        e.preventDefault();
+        dragDepth++;
+        overlay.style.display = 'flex';
+    });
+    document.addEventListener('dragover', e => {
+        if (!e.dataTransfer || !Array.from(e.dataTransfer.types||[]).includes('Files')) return;
+        e.preventDefault();
+    });
+    document.addEventListener('dragleave', e => {
+        if (!e.dataTransfer || !Array.from(e.dataTransfer.types||[]).includes('Files')) return;
+        dragDepth = Math.max(0, dragDepth - 1);
+        if (dragDepth === 0) overlay.style.display = 'none';
+    });
+    document.addEventListener('drop', e => {
+        if (!e.dataTransfer || !e.dataTransfer.files || !e.dataTransfer.files.length) return;
+        e.preventDefault();
+        dragDepth = 0;
+        overlay.style.display = 'none';
+        const file = e.dataTransfer.files[0];
+        if (!/\.json$/i.test(file.name) && file.type !== 'application/json') {
+            printRaw(`[drop] "${file.name}" is not a JSON file.`, 't-err');
+            return;
+        }
+        const reader = new FileReader();
+        reader.onload = () => {
+            const routed = tryImportAnyJson(reader.result, `drop > [${file.name}]`);
+            if (!routed) printRaw(`[drop] "${file.name}" — unrecognized JSON format.`, 't-err');
+        };
+        reader.onerror = () => printRaw(`[drop] failed to read "${file.name}".`, 't-err');
+        reader.readAsText(file);
+    });
+})();
 
 // ══════════════════════════════════════════════════
 // AMBIENT TERMINAL
@@ -4504,9 +5260,9 @@ function clearCanvas() {
 // ══════════════════════════════════════════════════
 
 function boot() {
-    enqueue('blackmirror --init --version 1.0.0 --build 2026-04-16', [
+    enqueue('blackmirror --init --version 1.2.0 --build 2026-04-16', [
         '99letters studio — all rights reserved',
-        'BLACK MIRROR BOARD v1.0  ( release: 2026-04-16 )',
+        'BLACK MIRROR BOARD v1.2  ( release: 2026-04-16 )',
         '',
         'loading kernel...',
         '  canvas engine      ✓ ready',
@@ -4527,7 +5283,7 @@ function boot() {
         '  export / import    ✓ JSON + PNG (alpha) ready',
         '  terminal daemon    ✓ running',
         '',
-        'v1.0 ship manifest:',
+        'v1.2 ship manifest:',
         '  · gray mode     — pebble ground (#DCDBD5) / cobalt ink (#1600A2)',
         '  · hit-test 2.0  — grab thin strokes without pixel-hunting',
         '  · shift resize  — aspect lock (image: on by default)',
